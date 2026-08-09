@@ -1,0 +1,61 @@
+# Local infrastructure only — NOT the ScaleScope services themselves.
+#
+# The eight ScaleScope services (gateway, collector, worker, target, oracle,
+# chaos, scheduler, web) are plain Node/Vite processes, run directly with
+# `npm run start:<name>` — see README.md "Running locally". This file exists
+# purely to give those processes something to talk to on your machine: NATS
+# with JetStream, Postgres, a Redis-protocol cache standing in for Valkey, and
+# ClickHouse. On Zerops these four are managed services already running the
+# moment the project is imported; locally, this is the fastest way to stand up
+# equivalents.
+#
+# Start with: docker compose up -d
+# Tear down with: docker compose down -v   (the -v also drops the data, which
+# you want between test runs so migrations re-apply cleanly)
+
+services:
+  nats:
+    image: nats:2-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"   # client connections
+      - "8222:8222"   # HTTP monitoring, http://localhost:8222/jsz for JetStream state
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: scalescope
+    ports:
+      - "55432:5432"
+    volumes:
+      - scalescope_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  cache:
+    # Valkey is Redis-protocol compatible; plain redis is a fine local stand-in
+    # and saves pulling an extra image most people don't already have cached.
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  metrics:
+    image: clickhouse/clickhouse-server:24-alpine
+    ports:
+      - "8123:8123"   # HTTP interface — the only interface this project uses
+      - "9000:9000"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - scalescope_ch:/var/lib/clickhouse
+
+volumes:
+  scalescope_pg:
+  scalescope_ch:

@@ -1,0 +1,14 @@
+{
+  "name": "@scalescope/contracts",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./subjects": "./src/subjects.js",
+    "./events": "./src/events.js",
+    "./frames": "./src/frames.js",
+    "./profiles": "./src/profiles.js"
+  }
+}

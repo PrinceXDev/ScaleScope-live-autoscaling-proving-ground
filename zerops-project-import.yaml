@@ -1,0 +1,151 @@
+#yamlPreprocessor=on
+#
+# ScaleScope v2 -- twelve services, every one load-bearing.
+#
+# Save as zerops-project-import.yaml and run:
+#   zcli project project-import zerops-project-import.yaml
+# or paste into "Import a project" in the Zerops GUI.
+#
+# FASTEST PATH TO A LIVE DEMO: import everything below, then push code (see
+# DEPLOY.md) to just five services first -- gateway, collector, worker, target,
+# web -- plus the four data-tier services, which need no code at all. That is
+# enough for the full live-scaling demo end to end. oracle, chaos and scheduler
+# add the prediction ghost-line, fault injection and unattended experiment
+# suites; push code to them whenever you're ready, in any order, with zero
+# changes to anything already running.
+#
+# Verify the version tags below against the Zerops docs before importing --
+# nodejs@22 / postgresql@16 / static, and the tech:ha@version pattern for HA
+# mode, were current at time of writing, but exact available tags for NATS and
+# ClickHouse do change. If an import fails, it names the bad type value.
+
+project:
+  name: scalescope
+  corePackage: LIGHT
+  tags:
+    - hackathon
+  envVariables:
+    LOG_LEVEL: info
+    # Shared secret between chaos and target's /admin/* endpoints. Generated
+    # once at import time and injected into both services below via
+    # ${CHAOS_SECRET} -- see each service's envSecrets.
+    SHARED_CHAOS_SECRET: <@generateRandomString(<32>)>
+
+services:
+  # ---- data tier ------------------------------------------------------------
+  - hostname: db
+    type: postgresql@16
+    mode: NON_HA
+    priority: 10
+
+  - hostname: metrics
+    type: clickhouse@25
+    mode: NON_HA
+    priority: 10
+
+  - hostname: cache
+    type: valkey@7.2
+    mode: NON_HA
+    priority: 10
+
+  - hostname: nats
+    type: nats@2
+    mode: NON_HA
+    priority: 10
+
+  # ---- the service under test ------------------------------------------------
+  # cpuMode is DEDICATED, not SHARED, on purpose. Zerops' own scaling docs state
+  # the horizontal-trigger CPU thresholds (minFreeCpuPercent and friends) apply
+  # to dedicated CPU only -- a shared-core target can sit at an apparent "10%
+  # free" reading that means something different platform-side, which is a good
+  # way to spend the first hour of a build confused about why nothing scales.
+  # Dedicated costs more per container-hour; durationS/cooldownS caps (in
+  # packages/contracts/src/profiles.js) exist specifically to bound that.
+  - hostname: target
+    type: nodejs@22
+    priority: 5
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 6
+    verticalAutoscaling:
+      minCpu: 1
+      maxCpu: 2
+      cpuMode: DEDICATED
+      minRam: 0.25
+      maxRam: 0.5
+      startCpuCoreCount: 1
+      minFreeCpuPercent: 10
+      minFreeRamPercent: 10
+    envSecrets:
+      CHAOS_SECRET: ${SHARED_CHAOS_SECRET}
+
+  # ---- load fleet -------------------------------------------------------------
+  - hostname: worker
+    type: nodejs@22
+    priority: 4
+    minContainers: 2
+    maxContainers: 4
+    envSecrets:
+      NATS_URL: nats://nats:4222
+
+  # ---- control plane ----------------------------------------------------------
+  - hostname: gateway
+    type: nodejs@22
+    priority: 3
+    enableSubdomainAccess: true
+    minContainers: 1
+    # Kept at 1 deliberately for the hackathon build. The in-memory barrier
+    # bookkeeping in orchestrator.js (pending finalisers, the READY-ack
+    # collector) is per-process; going above 1 without moving that state into
+    # Valkey would split-brain a run start across containers. Collector and
+    # oracle were built stateless from the start and can scale freely -- gateway
+    # is the one service where "one container" is a design choice, not an
+    # oversight, and it is written down here so it isn't quietly changed later.
+    maxContainers: 1
+    envSecrets:
+      NATS_URL: nats://nats:4222
+      MAX_RUNS_PER_HOUR: '12'
+
+  - hostname: collector
+    type: nodejs@22
+    priority: 4
+    minContainers: 1
+    maxContainers: 2
+    envSecrets:
+      NATS_URL: nats://nats:4222
+
+  # ---- prediction, fault injection, unattended suites --------------------------
+  - hostname: oracle
+    type: nodejs@22
+    priority: 2
+    minContainers: 1
+    maxContainers: 1
+    envSecrets:
+      NATS_URL: nats://nats:4222
+
+  - hostname: chaos
+    type: nodejs@22
+    priority: 2
+    minContainers: 1
+    maxContainers: 1
+    envSecrets:
+      NATS_URL: nats://nats:4222
+      CHAOS_SECRET: ${SHARED_CHAOS_SECRET}
+      TARGET_ADMIN_URL: http://target:3000
+
+  - hostname: scheduler
+    type: nodejs@22
+    priority: 1
+    minContainers: 1
+    maxContainers: 1
+    envSecrets:
+      NATS_URL: nats://nats:4222
+      GATEWAY_URL: http://gateway:3000
+      SUITE_MAX_RUNS: '8'
+      SUITE_MAX_TOTAL_S: '900'
+
+  # ---- dashboard ----------------------------------------------------------------
+  - hostname: web
+    type: static
+    priority: 1
+    enableSubdomainAccess: true

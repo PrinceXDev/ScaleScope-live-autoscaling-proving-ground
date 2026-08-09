@@ -1,0 +1,12 @@
+{
+  "name": "@scalescope/stores",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": {
+    "pg": "^8.13.1",
+    "redis": "^4.7.0",
+    "@scalescope/telemetry": "*"
+  }
+}

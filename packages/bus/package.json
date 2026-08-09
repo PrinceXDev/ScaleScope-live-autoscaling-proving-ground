@@ -1,0 +1,11 @@
+{
+  "name": "@scalescope/bus",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": {
+    "nats": "^2.29.3",
+    "@scalescope/contracts": "*"
+  }
+}

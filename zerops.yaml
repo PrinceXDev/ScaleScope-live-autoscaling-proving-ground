@@ -1,0 +1,160 @@
+#yamlPreprocessor=on
+#
+# ScaleScope is an npm-workspaces monorepo (see root package.json), which is
+# why this is ONE zerops.yaml with one `setup:` block per service rather than
+# eight separate files. Every backend service depends on `packages/*`, and
+# those are workspace-linked into a single root `node_modules` -- `npm ci` has
+# to run at the repo root for the symlinks to exist at all. Giving each service
+# its own zerops.yaml scoped to its own subdirectory would mean either
+# vendoring the shared packages into every app (and instantly diverging) or
+# fighting Zerops' build context to reach outside it. One shared file, one
+# `npm ci` at the root, and each setup's `start` command simply points at a
+# different entry file, is the version of this that stays correct as the
+# packages evolve.
+#
+# Deploy pattern: every service in the Zerops GUI is pointed at THIS file and
+# picks its own `setup:` name. `zcli push --setup <name>` from the repo root
+# does the same from the CLI.
+
+zerops:
+  # ---- backend services: identical build, different entry point ----------
+  - setup: gateway
+    build:
+      base: nodejs@22
+      buildCommands:
+        - npm ci
+      deployFiles:
+        - ./
+      cache: node_modules
+    run:
+      base: nodejs@22
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        SCALESCOPE_SERVICE: gateway
+      start: node apps/gateway/src/index.js
+
+  - setup: collector
+    build:
+      base: nodejs@22
+      buildCommands:
+        - npm ci
+      deployFiles:
+        - ./
+      cache: node_modules
+    run:
+      base: nodejs@22
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        SCALESCOPE_SERVICE: collector
+      start: node apps/collector/src/index.js
+
+  - setup: worker
+    build:
+      base: nodejs@22
+      buildCommands:
+        - npm ci
+      deployFiles:
+        - ./
+      cache: node_modules
+    run:
+      base: nodejs@22
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        SCALESCOPE_SERVICE: worker
+      start: node apps/worker/src/index.js
+
+  - setup: target
+    build:
+      base: nodejs@22
+      buildCommands:
+        - npm ci
+      deployFiles:
+        - ./
+      cache: node_modules
+    run:
+      base: nodejs@22
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        SCALESCOPE_SERVICE: target
+      start: node apps/target/src/index.js
+
+  - setup: oracle
+    build:
+      base: nodejs@22
+      buildCommands:
+        - npm ci
+      deployFiles:
+        - ./
+      cache: node_modules
+    run:
+      base: nodejs@22
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        SCALESCOPE_SERVICE: oracle
+      start: node apps/oracle/src/index.js
+
+  - setup: chaos
+    build:
+      base: nodejs@22
+      buildCommands:
+        - npm ci
+      deployFiles:
+        - ./
+      cache: node_modules
+    run:
+      base: nodejs@22
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        SCALESCOPE_SERVICE: chaos
+      start: node apps/chaos/src/index.js
+
+  - setup: scheduler
+    build:
+      base: nodejs@22
+      buildCommands:
+        - npm ci
+      deployFiles:
+        - ./
+      cache: node_modules
+    run:
+      base: nodejs@22
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        SCALESCOPE_SERVICE: scheduler
+        # Nightly regression is off by default -- see apps/scheduler/src/cron.js.
+        # Set to an hour 0-23 (UTC) to enable, or add a crontab entry below.
+        REGRESSION_CRON_HOUR: ''
+      # Zerops-native cron alternative to the in-process timer above: uncomment
+      # to have the platform itself invoke a one-shot regression suite trigger
+      # nightly, independent of the scheduler container's own uptime.
+      # crontab:
+      #   - command: "node apps/scheduler/scripts/fire-regression.js"
+      #     timing: "0 3 * * *"
+      #     allContainers: false
+      start: node apps/scheduler/src/index.js
+
+  # ---- dashboard: static build, everything else is identical -------------
+  - setup: web
+    build:
+      base: nodejs@22
+      buildCommands:
+        - npm ci
+        - npm run build -w @scalescope/web
+      deployFiles:
+        - apps/web/dist/~
+    run:
+      base: static

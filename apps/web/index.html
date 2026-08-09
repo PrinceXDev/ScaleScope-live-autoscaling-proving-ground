@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>ScaleScope — watch Zerops autoscale, live</title>
+    <meta name="description" content="ScaleScope fires controlled load at a service and shows Zerops autoscaling in real time: container count, latency and throughput streaming live, every run replayable." />
+    <meta name="theme-color" content="#070809" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ScaleScope — watch Zerops autoscale, live" />
+    <meta property="og:description" content="A latency target goes in. A staircase of containers comes out. Built on and about Zerops." />
+
+    <!--
+      Runtime configuration, not build-time.
+
+      The API's public hostname isn't known until the project is imported, and
+      baking it into the bundle means a full rebuild every time it changes -
+      which is exactly the wrong thing to be doing at hour seven. config.json is
+      a plain static file next to index.html: edit it, redeploy the static
+      service, done. The fetch is fire-and-forget with a same-origin /api
+      fallback, so a missing config file degrades rather than breaks.
+    -->
+    <script>
+      window.__SCALESCOPE__ = { apiUrl: '', loaded: false };
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>ScaleScope is a live telemetry dashboard and needs JavaScript.</noscript>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

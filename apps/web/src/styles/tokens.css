@@ -1,0 +1,120 @@
+/*
+ * ScaleScope design tokens.
+ *
+ * The visual brief is "instrument, not dashboard": near-black ground, one
+ * electric accent that only ever means container count, and a strict rule that
+ * every other hue is reserved for a single quantity. Once a judge learns that
+ * lime is containers and violet is the prediction, they can read any chart in
+ * the product without a legend.
+ */
+
+:root {
+  /* ---- ground ---- */
+  --bg:        #070809;
+  --bg-1:      #0d0f12;
+  --bg-2:      #14171c;
+  --bg-3:      #1b1f26;
+  --line:      #23283180;
+  --line-solid:#232831;
+
+  /* ---- ink ---- */
+  --fg:        #eef1f5;
+  --fg-dim:    #99a1ac;
+  --fg-faint:  #5c646f;
+
+  /* ---- semantic signal colours. one quantity each, no exceptions. ---- */
+  --containers: #C6F24E;  /* the brand colour. containers, and only containers. */
+  --throughput: #4EE1F2;  /* requests per second */
+  --latency:    #FF9E4E;  /* p95 */
+  --predicted:  #9B8CFF;  /* the oracle's forecast */
+  --breach:     #FF5E5E;  /* SLO violation, errors, chaos */
+  --good:       #4EF2A0;  /* recovered, healthy, within SLO */
+  --cost:       #F2A0DC;  /* money */
+
+  --containers-dim: #C6F24E22;
+  --throughput-dim: #4EE1F222;
+  --latency-dim:    #FF9E4E22;
+  --breach-dim:     #FF5E5E1f;
+
+  /* ---- type ---- */
+  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ---- geometry ---- */
+  --r-sm: 6px;
+  --r:    10px;
+  --r-lg: 16px;
+  --gut:  clamp(16px, 3vw, 32px);
+
+  /* ---- motion ---- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 160ms;
+  --dur: 320ms;
+  --dur-slow: 640ms;
+
+  --shadow: 0 1px 0 #ffffff08 inset, 0 12px 40px -12px #000000cc;
+  --glow-containers: 0 0 40px -6px #C6F24E55;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+html {
+  /* Lenis owns scrolling on the story route; native smooth scroll would fight
+     it. Explicitly off rather than relying on a default. */
+  scroll-behavior: auto;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Every number that animates gets tabular figures, otherwise a counter
+   ticking 1 -> 6 visibly jitters as glyph widths change. */
+.num, .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+}
+
+a { color: inherit; }
+
+::selection { background: var(--containers); color: #05070a; }
+
+/* Scrollbar, dark and thin, so the console doesn't get a bright gutter. */
+* { scrollbar-width: thin; scrollbar-color: var(--bg-3) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 99px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/*
+ * Reduced motion is not a checkbox exercise here.
+ *
+ * The story page's entire premise is scroll-driven animation, so honouring the
+ * preference means more than disabling transitions: the ScrollTrigger timelines
+ * are built with `scrub` disabled and Lenis is never instantiated, which turns
+ * the page into a plain vertical document with every state at its final value.
+ * The content still reads. That branch lives in src/motion/useMotionPref.js.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

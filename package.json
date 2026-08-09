@@ -1,0 +1,26 @@
+{
+  "name": "scalescope",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "A live autoscaling proving ground, built on and about Zerops.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node infra/scripts/check-syntax.mjs",
+    "build:web": "npm run build -w @scalescope/web",
+    "dev:web": "npm run dev -w @scalescope/web",
+    "start:gateway": "node apps/gateway/src/index.js",
+    "start:collector": "node apps/collector/src/index.js",
+    "start:worker": "node apps/worker/src/index.js",
+    "start:target": "node apps/target/src/index.js",
+    "start:oracle": "node apps/oracle/src/index.js",
+    "start:chaos": "node apps/chaos/src/index.js",
+    "start:scheduler": "node apps/scheduler/src/index.js"
+  }
+}
