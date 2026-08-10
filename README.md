@@ -1,5 +1,7 @@
 # ScaleScope
 
+### 🟢 [**Live demo → web-2e58.prg1.zerops.app**](https://web-2e58.prg1.zerops.app)
+
 A live autoscaling proving ground, built on and about Zerops. ScaleScope fires
 controlled load at a service and shows Zerops autoscaling in real time —
 container count, latency, and throughput streaming live, with every run
@@ -30,25 +32,28 @@ Twelve services. Every one is load-bearing — none is here to pad the count.
 | `metrics`   | clickhouse | Read model — every observed sample, queried by aggregate                  |
 | `cache`     | valkey     | Live materialized view — rolling container window, locks, credit budget   |
 
-```
-web (Story / Console / Lab)
-  │  SSE (live or replayed — same events, same reducer)
-  ▼
-gateway ──── PLAIN ────▶ worker (fleet, N containers)
-  │ REST + barrier                    │ fires load, measures latency
-  │                                   ▼
-  │                                 target  ◀── Zerops scales this
-  │                                   │  X-Instance-Id / X-Instance-Age
-  │                                   ▼
-  │                          worker measures, publishes samples
-  │                                   │ QUEUE
-  │                                   ▼
-  │                              collector ──▶ ClickHouse (samples)
-  │                                   │ merged tick frames
-  │                                   ├──▶ oracle (prediction)
-  │                                   └──▶ gateway ──▶ SSE broadcast
-  ▼
-Postgres (run registry) ◀── folded from the JetStream event log at finalisation
+```mermaid
+flowchart TD
+    web["web<br/>Story / Console / Lab"]
+    gateway["gateway<br/>control plane"]
+    worker["worker<br/>load fleet"]
+    target["target<br/>(Zerops scales this)"]
+    collector["collector<br/>ingest"]
+    oracle["oracle<br/>digital twin"]
+    ch[("ClickHouse<br/>samples")]
+    pg[("Postgres<br/>run registry")]
+
+    web -- "REST: start run" --> gateway
+    gateway -- "PLAIN: fire load" --> worker
+    worker -- "HTTP load" --> target
+    target -- "X-Instance-Id / X-Instance-Age" --> worker
+    worker -- "QUEUE: publish samples" --> collector
+    collector -- "merged tick frames" --> ch
+    collector -- "tick frame" --> oracle
+    collector -- "tick frame" --> gateway
+    oracle -- "prediction" --> gateway
+    gateway -- "SSE broadcast" --> web
+    gateway -. "JetStream event log<br/>folded at finalisation" .-> pg
 ```
 
 Every run is an append-only event log on JetStream — `created`, `armed`,
