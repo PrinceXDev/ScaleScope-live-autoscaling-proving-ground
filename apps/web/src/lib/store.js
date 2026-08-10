@@ -34,6 +34,7 @@ export const useStore = create((set, get) => ({
   scaleEvents: [],           // [{ t, from, to }]
   chaosEvents: [],           // [{ t, kind, detail }]
   sloEvents: [],             // [{ t, state }]
+  findingEvents: [],         // [{ t, targetKey, predicted, actual, absError, horizonS }]
   instances: new Map(),      // id -> { id, firstT, lastT, requests, peakP95 }
   workers: new Set(),
 
@@ -45,12 +46,14 @@ export const useStore = create((set, get) => ({
   runs: [],
   topology: null,
   budget: null,
+  suiteProgress: null,       // latest { suiteId, kind, status, step, stepResult?, result? } or null
 
   setConnected: (connected) => set({ connected }),
   setSource: (source) => set({ source }),
   setTopology: (topology) => set({ topology }),
   setBudget: (budget) => set({ budget }),
   setRuns: (runs) => set({ runs }),
+  setSuiteProgress: (p) => set({ suiteProgress: p }),
 
   resetRun: (runId = null, runConfig = null, source = 'live') => set({
     runId,
@@ -63,6 +66,7 @@ export const useStore = create((set, get) => ({
     scaleEvents: [],
     chaosEvents: [],
     sloEvents: [],
+    findingEvents: [],
     instances: new Map(),
     peak: { containers: 0, rps: 0, p95: 0 },
     timeToRecoverS: null,
@@ -123,6 +127,7 @@ export const useStore = create((set, get) => ({
 
   pushScale: (e) => set((s) => ({ scaleEvents: [...s.scaleEvents, e] })),
   pushChaos: (e) => set((s) => ({ chaosEvents: [...s.chaosEvents, e] })),
+  pushFinding: (e) => set((s) => ({ findingEvents: [...s.findingEvents, e] })),
   pushSlo: (e) => set((s) => ({
     sloEvents: [...s.sloEvents, e],
     timeToRecoverS: e.timeToRecoverS ?? s.timeToRecoverS,

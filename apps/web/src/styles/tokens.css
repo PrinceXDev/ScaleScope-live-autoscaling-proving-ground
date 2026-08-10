@@ -30,6 +30,12 @@
   --breach:     #FF5E5E;  /* SLO violation, errors, chaos */
   --good:       #4EF2A0;  /* recovered, healthy, within SLO */
   --cost:       #F2A0DC;  /* money */
+  /* Findings sit closer to --containers than the palette validator would like
+     (see docs/notes on the finding feature) -- the existing seven-hue palette
+     is already tight at this lightness/chroma target, so this relies on a
+     distinct dash pattern in TimelineChart, not colour alone, to stay legible
+     for colourblind viewers. Never render a finding marker without it. */
+  --finding:    #FFC857;  /* the oracle's forecast missed reality by more than its own threshold */
 
   --containers-dim: #C6F24E22;
   --throughput-dim: #4EE1F222;

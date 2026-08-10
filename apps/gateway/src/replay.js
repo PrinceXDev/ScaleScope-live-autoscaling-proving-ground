@@ -60,6 +60,7 @@ export const SSE_NAME_FOR_EVENT = {
   [EVENT.PHASE]: 'phase',
   [EVENT.CHAOS]: 'chaos',
   [EVENT.PREDICTION]: 'prediction',
+  [EVENT.FINDING]: 'finding',
   [EVENT.SLO]: 'slo',
   [EVENT.COMPLETED]: 'run.completed',
   [EVENT.FAILED]: 'run.failed',

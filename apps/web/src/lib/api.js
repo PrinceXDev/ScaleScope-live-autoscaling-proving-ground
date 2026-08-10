@@ -7,6 +7,7 @@
  */
 
 let base = '';
+let oracleBase = '';
 let ready = null;
 
 export function apiBase() { return base; }
@@ -18,7 +19,8 @@ export function initApi() {
     .catch(() => ({}))
     .then((cfg) => {
       base = (cfg.apiUrl || '').replace(/\/$/, '');
-      window.__SCALESCOPE__ = { apiUrl: base, loaded: true };
+      oracleBase = (cfg.oracleUrl || '').replace(/\/$/, '');
+      window.__SCALESCOPE__ = { apiUrl: base, oracleUrl: oracleBase, loaded: true };
       return base;
     });
   return ready;
@@ -60,6 +62,33 @@ export const api = {
   startSuite:    (body)        => req('/api/suites', { method: 'POST', body }),
   envelope:      ()            => req('/api/envelope'),
   markShowcase:  (id)          => req(`/api/runs/${id}/showcase`, { method: 'POST' }),
+};
+
+/**
+ * Oracle client — a separate service, a separate base URL.
+ *
+ * Oracle's HTTP layer serves every response with `Access-Control-Allow-Origin:
+ * *` deliberately (read-only, no credentials, no auth) so the dashboard can
+ * call it directly rather than routing prediction data through the gateway
+ * for no reason. See apps/oracle/src/index.js for the reasoning.
+ */
+async function oracleReq(path) {
+  await initApi();
+  if (!oracleBase) throw new Error('oracleUrl not configured in config.json');
+  const res = await fetch(`${oracleBase}${path}`);
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) {
+    const err = new Error(data?.error || `${res.status} ${res.statusText}`);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+export const oracleApi = {
+  params:   ()                  => oracleReq('/params'),
+  accuracy: (runId, limit = 200) => oracleReq(`/accuracy?${new URLSearchParams({ ...(runId ? { runId } : {}), limit })}`),
 };
 
 /**

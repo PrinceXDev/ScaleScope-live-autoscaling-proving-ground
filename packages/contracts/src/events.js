@@ -36,6 +36,8 @@ export const EVENT = {
   CHAOS: 'chaos',
   /** Oracle forecast. Payload: { t, horizonS, predicted, confidence }. */
   PREDICTION: 'prediction',
+  /** Oracle forecast missed reality by more than its own threshold. Payload: { findingId, t, targetKey, predictedAtT, horizonS, predicted, actual, absError }. */
+  FINDING: 'finding',
   /** SLO breached or recovered. Payload: { state, p95, thresholdMs, t }. */
   SLO: 'slo',
   /** Terminal. Payload: RunSummary. */
@@ -73,6 +75,7 @@ export function foldRun(events) {
     minP95: Infinity,
     scaleEvents: [],
     chaosEvents: [],
+    findingEvents: [],
     sloBreachAt: null,
     sloRecoverAt: null,
     timeToRecoverS: null,
@@ -126,6 +129,10 @@ export function foldRun(events) {
 
       case EVENT.CHAOS:
         state.chaosEvents.push(e.data);
+        break;
+
+      case EVENT.FINDING:
+        state.findingEvents.push(e.data);
         break;
 
       case EVENT.SLO:

@@ -8,6 +8,7 @@
 
 import { randomUUID } from 'node:crypto';
 import {
+  CHAOS,
   CTRL,
   EVENT,
   clampRunConfig,
@@ -57,6 +58,32 @@ const pendingFinalisers = new Map();
 
 /** Guard against a stop and a timer both finalising the same run. */
 const finalising = new Set();
+
+/**
+ * runId -> { lastFiredAt } for runs that opted into auto-chaos-on-finding.
+ *
+ * In-memory, not Postgres: it only needs to answer one question ("is this run
+ * currently eligible, and how long since it last fired") on the hot path of a
+ * finding arriving, and a gateway restart mid-run losing this state is an
+ * acceptable failure mode -- the run itself, and every finding on it, is
+ * still durably logged either way; only the auto-probe opt-in is lost, which
+ * degrades to "no automatic follow-up chaos for the rest of this run", not
+ * data loss.
+ */
+const autoChaosRuns = new Map();
+
+/**
+ * Minimum time between auto-fired chaos probes on the same run. A single
+ * anomaly episode can produce a burst of findings in quick succession (one
+ * per tick for as long as the divergence persists) -- without a cooldown
+ * comfortably longer than one probe's own duration, each of those findings
+ * would independently fire a new degrade command, continuously resetting the
+ * target's degrade TTL and making it impossible to tell the original anomaly
+ * apart from the system's own repeated probing of it.
+ */
+const AUTO_CHAOS_COOLDOWN_MS = Number(process.env.AUTO_CHAOS_COOLDOWN_MS || 45_000);
+const AUTO_CHAOS_DURATION_S = 20;
+const AUTO_CHAOS_DETAIL = { jitterMs: 800, failRate: 0.1 };
 
 export class HttpError extends Error {
   constructor(status, message, extra = {}) {
@@ -159,6 +186,10 @@ export async function startRun(input = {}) {
   try {
     await insertRunRow(runId, config);
 
+    if (config.autoChaosOnFinding) {
+      autoChaosRuns.set(runId, { lastFiredAt: 0 });
+    }
+
     const created = { runId, ...config };
     await appendEvent(js, runId, EVENT.CREATED, created, 'gateway');
     broadcast(nc, 'run.created', created);
@@ -202,6 +233,7 @@ export async function startRun(input = {}) {
     // until the TTL expires.
     await RunLocks.release(runId).catch(() => {});
     await CreditBudget.refund().catch(() => {});
+    autoChaosRuns.delete(runId);
     await pgPool
       .query(`UPDATE runs SET status = 'failed', ended_at = now() WHERE id = $1`, [runId])
       .catch(() => {});
@@ -323,6 +355,56 @@ export async function stopRun(runId) {
   return finishRun(runId, 'stopped');
 }
 
+/**
+ * The auto-chaos feedback loop.
+ *
+ * Called for every EVENT.FINDING that crosses the bus, for every run --
+ * `autoChaosRuns` is the opt-in gate, checked first so this is a no-op for
+ * the overwhelming majority of findings on runs that never asked for it.
+ *
+ * The probe itself is fixed and deliberately mild (a `degrade`, never
+ * `kill`), because the point is to test whether the anomaly the oracle just
+ * flagged reproduces under a controlled, scoped condition -- not to stress
+ * the target further while it may already be struggling. Proportionally
+ * scaling the probe to the finding's absError was considered and rejected:
+ * a bigger probe would make it harder to tell "the anomaly reproduced" from
+ * "we hit it harder this time".
+ *
+ * `command.triggeredBy` carries the finding's own id forward onto both the
+ * intent-side EVENT.CHAOS (appended here) and, once chaos/src/index.js
+ * forwards it, the effect-side one too -- so a run's timeline can answer
+ * "why did chaos fire here" with a real foreign key, not a guess from
+ * adjacent timestamps.
+ */
+export async function maybeAutoChaos(finding) {
+  requireBus();
+  const { runId, findingId } = finding;
+  const entry = autoChaosRuns.get(runId);
+  if (!entry) return;
+
+  const sinceLastFire = Date.now() - entry.lastFiredAt;
+  if (sinceLastFire < AUTO_CHAOS_COOLDOWN_MS) {
+    log.info(`auto-chaos skipped for run ${runId}: cooldown active (${Math.round((AUTO_CHAOS_COOLDOWN_MS - sinceLastFire) / 1000)}s left)`);
+    return;
+  }
+  entry.lastFiredAt = Date.now();
+
+  const command = {
+    runId,
+    kind: 'degrade',
+    detail: AUTO_CHAOS_DETAIL,
+    durationS: AUTO_CHAOS_DURATION_S,
+    at: Date.now(),
+    triggeredBy: findingId,
+    reason: 'auto-chaos-on-finding',
+  };
+
+  pub(nc, CHAOS.COMMAND, command);
+  await appendEvent(js, runId, EVENT.CHAOS, command, 'gateway');
+  broadcast(nc, 'chaos', command);
+  log.info(`auto-chaos degrade fired for run ${runId}, triggered by finding ${findingId}`);
+}
+
 // ---------------------------------------------------------------------------
 // Finalisation: fold the log, write the projections
 // ---------------------------------------------------------------------------
@@ -374,6 +456,7 @@ export async function finishRun(runId, reason = 'scheduled') {
       estCostUsd: estimateCost(containerSeconds),
       scaleEvents: folded.scaleEvents.length,
       chaosEvents: folded.chaosEvents.length,
+      findingEvents: folded.findingEvents.length,
     };
 
     await pgPool.query(
@@ -425,6 +508,7 @@ export async function finishRun(runId, reason = 'scheduled') {
     throw err;
   } finally {
     finalising.delete(runId);
+    autoChaosRuns.delete(runId);
   }
 }
 

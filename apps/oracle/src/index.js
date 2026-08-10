@@ -51,6 +51,7 @@
  */
 
 import http from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { consumerOpts, createInbox } from 'nats';
 import {
   connectBus, ensureStreams, subscribe, broadcast, appendEvent, jc,
@@ -96,6 +97,19 @@ const IDLE_MS = Number(process.env.ORACLE_IDLE_MS || 30_000);
  * corrupt.
  */
 const MIN_FRAMES_TO_PERSIST = Number(process.env.ORACLE_MIN_FRAMES || 20);
+
+/**
+ * How wrong a forecast has to be, in containers, before it stops being noise
+ * and becomes a finding worth putting on the timeline. Two containers is
+ * deliberately not "any miss at all" -- a model built on ninety data points
+ * will be off by a fraction of a container constantly, and flagging every
+ * rounding difference would bury the divergences that actually mean
+ * something (a scale-up that never came, a lag the twin hasn't learned yet)
+ * under noise. This is the one number in the whole feature that trades
+ * sensitivity for signal, so it is environment-configurable rather than
+ * buried in the comparison itself.
+ */
+const FINDING_THRESHOLD_CONTAINERS = Number(process.env.ORACLE_FINDING_THRESHOLD || 2);
 
 /** runId -> live twin state. One entry per run currently producing frames. */
 const twins = new Map();
@@ -172,8 +186,14 @@ async function ensureTwin(runId) {
  * axis rather than wall-clock because ticks are aligned across the fleet by
  * construction (see the bucket clock in @scalescope/telemetry) and wall-clock
  * is not.
+ *
+ * A miss past FINDING_THRESHOLD_CONTAINERS is promoted from a row in the
+ * accuracy log to a durable EVENT.FINDING -- the same two-sink pattern
+ * PREDICTION already uses, so a finding shows up on the live timeline within
+ * the second it's detected, and shows up again at the same tick when the run
+ * is replayed later.
  */
-function resolvePending(entry, frame) {
+async function resolvePending(entry, frame) {
   if (!entry.pending.length) return;
   const kept = [];
   for (const p of entry.pending) {
@@ -182,15 +202,36 @@ function resolvePending(entry, frame) {
     // forecast we can fairly score; drop it rather than scoring it against the
     // wrong second.
     if (frame.t - p.dueT <= 2) {
-      accuracy.record({
+      const actual = frame.containers ?? 0;
+      const absError = accuracy.record({
         runId: entry.runId,
         targetKey: entry.targetKey,
         t: frame.t,
         predictedAtT: p.t,
         horizonS: HORIZON_S,
         predicted: p.predicted,
-        actual: frame.containers ?? 0,
+        actual,
       });
+
+      if (absError >= FINDING_THRESHOLD_CONTAINERS) {
+        const finding = {
+          // A real id, not a composite of other fields -- anything downstream
+          // that wants to point back at "the finding that caused this" (the
+          // auto-chaos loop does) needs a stable foreign key, not a string it
+          // has to reconstruct from runId+t+targetKey and hope never collides.
+          findingId: randomUUID(),
+          runId: entry.runId,
+          targetKey: entry.targetKey,
+          t: frame.t,
+          predictedAtT: p.t,
+          horizonS: HORIZON_S,
+          predicted: p.predicted,
+          actual,
+          absError,
+        };
+        broadcast(nc, 'finding', finding);
+        await appendEvent(js, entry.runId, EVENT.FINDING, finding, 'oracle', frame.t);
+      }
     }
   }
   entry.pending = kept;
@@ -205,7 +246,7 @@ async function onObserve(frame) {
 
   const result = entry.twin.observe(frame, HORIZON_S);
 
-  resolvePending(entry, frame);
+  await resolvePending(entry, frame);
   entry.pending.push({ t: frame.t, dueT: frame.t + HORIZON_S, predicted: result.predicted });
 
   const payload = {

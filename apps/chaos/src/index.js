@@ -103,13 +103,31 @@ async function main() {
     }
     try {
       const result = await handler(cmd);
-      const payload = { runId: cmd.runId, at: Date.now(), ...result };
+      const payload = {
+        runId: cmd.runId,
+        at: Date.now(),
+        // Carried forward, not reconstructed: the gateway's intent-side
+        // EVENT.CHAOS already stamped these when this was an auto-fired
+        // probe. Forwarding them onto the effect-side entry too means both
+        // halves of a single chaos command point back at the same finding,
+        // rather than only the one the gateway wrote.
+        triggeredBy: cmd.triggeredBy ?? null,
+        reason: cmd.reason ?? null,
+        ...result,
+      };
       broadcast(nc, 'chaos', payload);
       await appendEvent(js, cmd.runId, EVENT.CHAOS, payload, 'chaos');
       log.info(`chaos ${cmd.kind} applied to run ${cmd.runId}`);
     } catch (err) {
       log.error(`chaos ${cmd.kind} failed for run ${cmd.runId}: ${err.message}`);
-      const payload = { runId: cmd.runId, at: Date.now(), kind: cmd.kind, error: err.message };
+      const payload = {
+        runId: cmd.runId,
+        at: Date.now(),
+        kind: cmd.kind,
+        error: err.message,
+        triggeredBy: cmd.triggeredBy ?? null,
+        reason: cmd.reason ?? null,
+      };
       broadcast(nc, 'chaos', payload);
       await appendEvent(js, cmd.runId, EVENT.CHAOS, payload, 'chaos').catch(() => {});
     }

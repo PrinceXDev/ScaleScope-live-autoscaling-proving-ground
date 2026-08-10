@@ -15,12 +15,15 @@ import uPlot from 'uplot';
  *
  * Three series are drawn at fixed roles -- containers (the brand colour, always
  * present), throughput, and latency -- plus an optional dashed prediction line.
- * Vertical bands mark chaos and SLO-breach windows so an annotation reads as
- * part of the chart rather than a separate list underneath it.
+ * Vertical bands mark chaos and finding events so an annotation reads as part
+ * of the chart rather than a separate list underneath it. Findings get a
+ * dotted rather than dashed line -- --finding sits close to --containers on
+ * the palette (see tokens.css), so the two must never rely on hue alone to
+ * stay legible for colourblind viewers.
  */
 export default function TimelineChart({
   t = [], containers = [], rps = [], p95 = [], predicted = [],
-  scaleEvents = [], chaosEvents = [], sloEvents = [], height = 260,
+  scaleEvents = [], chaosEvents = [], sloEvents = [], findingEvents = [], height = 260,
 }) {
   const holderRef = useRef(null);
   const plotRef = useRef(null);
@@ -57,7 +60,8 @@ export default function TimelineChart({
       hooks: {
         drawSeries: [
           (u) => drawBands(u, [
-            ...chaosEvents.map((e) => ({ t: e.at ? e.t ?? e.at : e.t, color: 'var(--breach-dim)', width: 2 })),
+            ...chaosEvents.map((e) => ({ t: e.at ? e.t ?? e.at : e.t, colorVar: '--breach', dash: [2, 3] })),
+            ...findingEvents.map((e) => ({ t: e.t, colorVar: '--finding', dash: [1, 2] })),
           ]),
         ],
       },
@@ -84,15 +88,23 @@ export default function TimelineChart({
   return <div className="chart" ref={holderRef} />;
 }
 
+/**
+ * Canvas can't read `var(--x)` directly -- resolve each mark's CSS custom
+ * property against the chart's own root once per draw, so a finding and a
+ * chaos band each carry their own colour rather than sharing the one literal
+ * this function used to hardcode.
+ */
 function drawBands(u, marks) {
   const { ctx } = u;
+  const styles = getComputedStyle(u.root);
   ctx.save();
   for (const m of marks) {
     if (m.t == null) continue;
     const x = u.valToPos(m.t, 'x', true);
-    ctx.strokeStyle = '#FF5E5E88';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([2, 3]);
+    const base = styles.getPropertyValue(m.colorVar).trim() || '#FF5E5E';
+    ctx.strokeStyle = `${base}aa`;
+    ctx.lineWidth = 1.25;
+    ctx.setLineDash(m.dash || [2, 3]);
     ctx.beginPath();
     ctx.moveTo(x, u.bbox.top);
     ctx.lineTo(x, u.bbox.top + u.bbox.height);

@@ -37,6 +37,7 @@ zerops:
         VALKEY_URL: ${cache_connectionString}
         CLICKHOUSE_USER: ${metrics_user}
         CLICKHOUSE_PASSWORD: ${metrics_password}
+        CLICKHOUSE_DATABASE: ${metrics_dbName}
         NATS_URL: ${nats_connectionString}
       start: node apps/gateway/src/index.js
 
@@ -58,6 +59,7 @@ zerops:
         VALKEY_URL: ${cache_connectionString}
         CLICKHOUSE_USER: ${metrics_user}
         CLICKHOUSE_PASSWORD: ${metrics_password}
+        CLICKHOUSE_DATABASE: ${metrics_dbName}
         NATS_URL: ${nats_connectionString}
       start: node apps/collector/src/index.js
 

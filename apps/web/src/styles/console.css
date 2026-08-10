@@ -57,6 +57,7 @@
 .event-breach .event-text { color: var(--breach); }
 .event-recover .event-text { color: var(--good); }
 .event-chaos .event-text { color: var(--predicted); }
+.event-finding .event-text { color: var(--finding); }
 
 .run-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .run-history li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 8px 0; border-bottom: 1px solid var(--line); }

@@ -1,28 +1,50 @@
-import { useEffect, useState } from 'react';
-import { api } from '../lib/api.js';
+import { useEffect, useRef, useState } from 'react';
+import { api, openStream } from '../lib/api.js';
+import { useStore } from '../lib/store.js';
+import OracleLearningPanel from '../components/OracleLearningPanel.jsx';
+import '../styles/console.css'; // shared .stat-row / .stat-tile / .field-hint used by StatTile
 import '../styles/lab.css';
+
+const SUITE_LABEL = { manual: 'manual suite', knee: 'knee search', envelope: 'capacity envelope', regression: 'regression suite' };
 
 /**
  * The lab: capacity envelope, A/B comparison, run permalinks.
  *
- * Scope note: suites are started here but their progress is read by polling
- * `GET /api/suites/:id`-equivalent data through the run history rather than a
- * live subscription — the scheduler broadcasts `suite.progress` over the same
- * bus everything else uses, so wiring a live progress bar is a follow-up, not
- * a redesign. What's here is real and functional: it reads the latest
- * completed envelope sweep, and it diffs any two runs by id.
+ * Live suite progress rides the same `suite.progress` bus event every other
+ * view already consumes via `openStream` — the scheduler broadcasts it on
+ * `UI.BROADCAST` at suite start, after every step, and on completion. The
+ * payload never carries a total step count (the scheduler doesn't know one
+ * up front for a knee search, whose length depends on where the knee turns
+ * out to be), so this renders as a live step counter and a pulsing bar rather
+ * than a determinate percentage — an honest reflection of what's knowable at
+ * suite-start time, not a missing feature.
  */
 export default function Lab() {
+  const suiteProgress = useStore((s) => s.suiteProgress);
   const [envelope, setEnvelope] = useState(null);
   const [runs, setRuns] = useState([]);
   const [a, setA] = useState('');
   const [b, setB] = useState('');
   const [compare, setCompare] = useState(null);
   const [error, setError] = useState(null);
+  const closeRef = useRef(null);
 
   useEffect(() => {
     api.envelope().then(setEnvelope).catch(() => {});
     api.listRuns(50).then(setRuns).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    closeRef.current = openStream((event, data) => {
+      if (event !== 'suite.progress') return;
+      useStore.getState().setSuiteProgress(data);
+      if (data.status && data.status !== 'running') {
+        // A suite that just finished may have produced a new envelope sweep -
+        // refresh so the table below updates without a manual reload.
+        api.envelope().then(setEnvelope).catch(() => {});
+      }
+    });
+    return () => closeRef.current?.();
   }, []);
 
   const runCompare = async () => {
@@ -35,6 +57,10 @@ export default function Lab() {
 
   return (
     <div className="page lab">
+      {suiteProgress && <SuiteProgressPanel progress={suiteProgress} />}
+
+      <OracleLearningPanel />
+
       <section className="panel">
         <header className="panel-head"><span className="panel-title">Capacity envelope</span></header>
         <div className="panel-body">
@@ -113,4 +139,46 @@ function fmtDelta(v, decimals = 0) {
   if (v == null || Number.isNaN(v)) return '—';
   const n = Number(v.toFixed(decimals));
   return n > 0 ? `+${n}` : String(n);
+}
+
+/**
+ * Live suite progress. `progress.status` is 'running' for every broadcast up
+ * to the last one, which carries whatever terminal status the scheduler
+ * computed ('completed' | 'aborted_budget' | 'aborted' | 'failed'). Terminal
+ * states render for a beat so the outcome is legible, then the panel is left
+ * in place (not auto-dismissed) — a suite that just failed is exactly the
+ * moment someone doesn't want the evidence disappearing on its own.
+ */
+function SuiteProgressPanel({ progress }) {
+  const running = progress.status === 'running';
+  const label = SUITE_LABEL[progress.kind] || progress.kind;
+  const stepSummary = progress.stepResult?.summary;
+
+  return (
+    <section className={`panel suite-progress suite-progress--${running ? 'running' : progress.status}`}>
+      <header className="panel-head">
+        <span className="panel-title">{label}</span>
+        <span className={`suite-status-pill suite-status-pill--${running ? 'running' : progress.status}`}>
+          {running ? 'running' : progress.status.replace(/_/g, ' ')}
+        </span>
+      </header>
+      <div className="panel-body">
+        <div className="suite-progress-bar" role="progressbar" aria-valuetext={`step ${progress.step}`}>
+          <div className={`suite-progress-fill suite-progress-fill--${running ? 'indeterminate' : 'done'}`} />
+        </div>
+        <div className="suite-progress-meta">
+          <span>step {progress.step}</span>
+          {stepSummary && (
+            <span className="suite-progress-step-summary">
+              {stepSummary.peakContainers != null && `peak ${stepSummary.peakContainers} containers`}
+              {stepSummary.peakRps != null && ` · ${Math.round(stepSummary.peakRps)} req/s`}
+            </span>
+          )}
+          {!running && progress.result?.error && (
+            <span className="suite-progress-error">{progress.result.error}</span>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 }

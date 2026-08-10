@@ -8,3 +8,82 @@
 .lab-compare-pickers select { flex: 1; background: var(--bg-2); border: 1px solid var(--line-solid); color: var(--fg); padding: 8px 10px; border-radius: var(--r-sm); }
 
 .lab-deltas { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 13px; color: var(--fg-dim); }
+
+/* ---- live suite progress ---- */
+
+.suite-progress .panel-head { display: flex; align-items: center; justify-content: space-between; }
+
+.suite-status-pill {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line-solid);
+  color: var(--fg-dim); background: var(--bg-2);
+}
+.suite-status-pill--running { color: var(--throughput); border-color: var(--throughput-dim); background: var(--throughput-dim); }
+.suite-status-pill--completed { color: var(--good); border-color: var(--good); background: #4ef2a01f; }
+.suite-status-pill--failed,
+.suite-status-pill--aborted,
+.suite-status-pill--aborted_budget { color: var(--breach); border-color: var(--breach); background: var(--breach-dim); }
+
+.suite-progress-bar {
+  height: 6px; border-radius: 999px; background: var(--bg-3); overflow: hidden; position: relative;
+}
+
+.suite-progress-fill { position: absolute; inset: 0; border-radius: 999px; }
+
+.suite-progress-fill--indeterminate {
+  width: 40%; background: var(--throughput);
+  animation: suite-progress-sweep 1.4s var(--ease-in-out) infinite;
+}
+.suite-progress-fill--done { width: 100%; background: var(--good); }
+.suite-progress--failed .suite-progress-fill--done,
+.suite-progress--aborted .suite-progress-fill--done,
+.suite-progress--aborted_budget .suite-progress-fill--done { background: var(--breach); }
+
+@keyframes suite-progress-sweep {
+  0%   { left: -40%; }
+  100% { left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .suite-progress-fill--indeterminate { animation: none; left: 0; width: 100%; opacity: 0.5; }
+}
+
+.suite-progress-meta {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--fg-dim);
+}
+.suite-progress-step-summary { color: var(--fg-faint); }
+.suite-progress-error { color: var(--breach); }
+
+/* ---- oracle learning panel ---- */
+
+.oracle-panel .panel-head { display: flex; align-items: center; justify-content: space-between; }
+
+.confidence-pill {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line-solid);
+}
+.confidence-pill--calibrating { color: var(--latency); border-color: var(--latency-dim); background: var(--latency-dim); }
+.confidence-pill--trained { color: var(--predicted); border-color: #9B8CFF55; background: #9B8CFF1a; }
+
+.oracle-blurb { margin-bottom: 16px; max-width: 62ch; }
+
+.oracle-stat-row { margin-bottom: 18px; }
+
+.oracle-belief {
+  background: var(--bg-2); border: 1px solid var(--line-solid); border-radius: var(--r-sm);
+  padding: 12px 14px; margin-bottom: 18px;
+}
+.oracle-belief-key { font-size: 12px; color: var(--fg-faint); margin-bottom: 8px; }
+.oracle-belief-row { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 13px; color: var(--fg-dim); }
+.oracle-belief-row b { color: var(--fg); font-weight: 600; }
+
+.oracle-trend-head {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-faint);
+  margin-bottom: 6px;
+}
+
+.accuracy-trend { height: 120px; }
+.accuracy-trend-empty {
+  height: 120px; display: flex; align-items: center; justify-content: center;
+  color: var(--fg-faint); font-size: 13px; border: 1px dashed var(--line-solid); border-radius: var(--r-sm);
+}

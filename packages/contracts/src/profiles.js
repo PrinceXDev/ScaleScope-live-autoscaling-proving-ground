@@ -110,6 +110,14 @@ export const DEFAULT_RUN = {
   /** Autopilot latency setpoint; only used when profile === AUTOPILOT. */
   setpointMs: 400,
   chaos: null,
+  /**
+   * Opt-in, off by default. If true, a severe oracle finding mid-run (see
+   * EVENT.FINDING) makes the gateway fire one scoped `degrade` chaos probe on
+   * its own, provenance-stamped back to the finding that triggered it -- a
+   * closed loop between two services that were built independently, not a
+   * special case wired through a side channel. Never escalates to `kill`.
+   */
+  autoChaosOnFinding: false,
 };
 
 /** Server-side ceilings. Enforced in code, not by discipline -- see credit burn. */
@@ -128,6 +136,7 @@ export function clampRunConfig(input = {}) {
   cfg.rounds = Math.min(LIMITS.rounds, Math.max(1000, Number(cfg.rounds) || DEFAULT_RUN.rounds));
   cfg.sloP95Ms = Math.max(1, Number(cfg.sloP95Ms) || DEFAULT_RUN.sloP95Ms);
   cfg.setpointMs = Math.max(1, Number(cfg.setpointMs) || DEFAULT_RUN.setpointMs);
+  cfg.autoChaosOnFinding = Boolean(cfg.autoChaosOnFinding);
   if (!Object.values(PROFILE).includes(cfg.profile)) cfg.profile = DEFAULT_RUN.profile;
   return cfg;
 }

@@ -59,6 +59,9 @@ export default function Console({ replayRunId = null }) {
       case 'chaos':
         s.pushChaos(data);
         break;
+      case 'finding':
+        s.pushFinding(data);
+        break;
       case 'worker.hello':
         s.seeWorker(data.workerId);
         break;
@@ -103,12 +106,14 @@ export default function Console({ replayRunId = null }) {
               scaleEvents={store.scaleEvents}
               chaosEvents={store.chaosEvents}
               sloEvents={store.sloEvents}
+              findingEvents={store.findingEvents}
             />
             <div className="chart-legend">
               <span><i style={{ background: 'var(--containers)' }} />containers</span>
               <span><i style={{ background: 'var(--throughput)' }} />req/s</span>
               <span><i style={{ background: 'var(--latency)' }} />p95 ms</span>
               <span><i style={{ background: 'var(--predicted)', borderStyle: 'dashed' }} />predicted</span>
+              <span><i style={{ background: 'var(--finding)' }} />finding</span>
             </div>
           </div>
         </section>
@@ -141,7 +146,12 @@ export default function Console({ replayRunId = null }) {
         <section className="panel">
           <header className="panel-head"><span className="panel-title">Annotations</span></header>
           <div className="panel-body">
-            <EventTicker scaleEvents={store.scaleEvents} sloEvents={store.sloEvents} chaosEvents={store.chaosEvents} />
+            <EventTicker
+              scaleEvents={store.scaleEvents}
+              sloEvents={store.sloEvents}
+              chaosEvents={store.chaosEvents}
+              findingEvents={store.findingEvents}
+            />
           </div>
         </section>
 

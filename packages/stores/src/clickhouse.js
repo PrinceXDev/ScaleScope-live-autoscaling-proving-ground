@@ -17,6 +17,19 @@ const HOST = process.env.CLICKHOUSE_URL
 const USER = process.env.metrics_user || process.env.CLICKHOUSE_USER || 'default';
 const PASSWORD = process.env.metrics_password || process.env.CLICKHOUSE_PASSWORD || '';
 
+/**
+ * Zerops provisions the ClickHouse user's grants scoped to a database named
+ * after the service (`metrics_dbName`, e.g. "db"), not to ClickHouse's own
+ * "default" database -- and the HTTP interface defaults to "default" when no
+ * database is named on the request. Leaving this unset means every query
+ * silently runs against a database the user has zero grants on, which fails
+ * with "Not enough privileges" on the first CREATE TABLE and, less loudly,
+ * would keep failing the same way on every read afterward even for a user
+ * with full rights one database over. Always naming it here is what makes
+ * `zerops`'s grants (see infra/migrations/clickhouse) actually apply.
+ */
+const DATABASE = process.env.metrics_dbName || process.env.CLICKHOUSE_DATABASE || 'default';
+
 function authHeaders() {
   const h = {};
   if (USER) h['X-ClickHouse-User'] = USER;
@@ -28,7 +41,8 @@ export async function chQuery(sql, body, { timeoutMs = 15_000 } = {}) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const res = await fetch(`${HOST}/?query=${encodeURIComponent(sql)}`, {
+    const qs = new URLSearchParams({ query: sql, database: DATABASE });
+    const res = await fetch(`${HOST}/?${qs}`, {
       method: 'POST',
       headers: authHeaders(),
       body,

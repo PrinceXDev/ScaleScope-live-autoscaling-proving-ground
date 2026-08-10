@@ -19,7 +19,7 @@ import { UI, TELEMETRY } from '@scalescope/contracts';
 import { runPostgresMigrations, ensureClickhouse, connectValkey } from '@scalescope/stores';
 import { log } from '@scalescope/telemetry';
 
-import { initOrchestrator, HttpError } from './orchestrator.js';
+import { initOrchestrator, HttpError, maybeAutoChaos } from './orchestrator.js';
 import { runsRoutes } from './routes/runs.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { topologyRoutes, initTopology, noteHeartbeat } from './routes/topology.js';
@@ -81,9 +81,12 @@ async function main() {
   // listens on. This one does not touch a socket; it only proves liveness for
   // services the gateway has no other way to observe. Two listeners on one
   // PLAIN subject is exactly the fan-out this subject exists for.
-  subscribe(nc, UI.BROADCAST, ({ event }) => {
+  subscribe(nc, UI.BROADCAST, ({ event, data }) => {
     const service = HEARTBEAT_FROM_EVENT[event];
     if (service) noteHeartbeat(service);
+    if (event === 'finding') {
+      maybeAutoChaos(data).catch((err) => log.error(`auto-chaos handling failed: ${err.message}`));
+    }
   });
   subscribe(nc, TELEMETRY.HELLO, () => noteHeartbeat('worker'));
   subscribe(nc, TELEMETRY.WATERMARK, () => noteHeartbeat('collector'));

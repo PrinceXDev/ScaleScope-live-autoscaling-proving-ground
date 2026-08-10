@@ -79,6 +79,23 @@ export default function RunControls({ onStart, onStop, onSetpoint, running, budg
         )}
       </div>
 
+      <div className="field field-checkbox">
+        <label>
+          <input
+            type="checkbox"
+            checked={!!form.autoChaosOnFinding}
+            onChange={(e) => setForm((f) => ({ ...f, autoChaosOnFinding: e.target.checked }))}
+            disabled={running}
+          />
+          Auto-fire chaos on severe divergence finding
+        </label>
+        <p className="field-hint">
+          Opt-in, off by default. If the oracle flags a forecast miss of 2+ containers mid-run,
+          fires one scoped <code>degrade</code> probe (never <code>kill</code>) to see whether the
+          anomaly reproduces — provenance-stamped back to the finding that triggered it.
+        </p>
+      </div>
+
       {error && <p className="run-controls-error">{error}</p>}
 
       <div className="run-controls-actions">
