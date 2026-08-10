@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, openStream } from '../lib/api.js';
 import { useStore } from '../lib/store.js';
+import { emitTopologyEvent } from '../motion/gsap.js';
 import TimelineChart from '../components/TimelineChart.jsx';
 import StatTile from '../components/StatTile.jsx';
 import ContainerGrid from '../components/ContainerGrid.jsx';
 import EventTicker from '../components/EventTicker.jsx';
 import RunControls from '../components/RunControls.jsx';
+import TopologyPanel from '../components/TopologyPanel.jsx';
 import '../styles/console.css';
+import '../styles/topology.css';
 
 /**
  * The live console.
@@ -39,6 +42,7 @@ export default function Console({ replayRunId = null }) {
   }, [replayRunId]);
 
   function handleEvent(event, data) {
+    emitTopologyEvent(event, data);
     const s = useStore.getState();
     switch (event) {
       case 'run.created':
@@ -154,6 +158,8 @@ export default function Console({ replayRunId = null }) {
             />
           </div>
         </section>
+
+        <TopologyPanel />
 
         <section className="panel console-history">
           <header className="panel-head"><span className="panel-title">Run history</span></header>

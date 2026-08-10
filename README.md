@@ -92,6 +92,21 @@ zerops.yaml                 one file, one setup per service (npm workspaces mono
 zerops-project-import.yaml  the whole project, one file
 ```
 
+## Watch it happen: the live topology panel
+
+The console's `Architecture, live` panel (`apps/web/src/components/TopologyPanel.jsx`)
+draws the real service graph — the same `SUBJECT_TABLE` and health checks
+already served by `GET /api/topology` — and animates a packet along an edge
+every time an SSE event proves that hop just happened: a `tick` lights up
+`collector→gateway`, an oracle `finding` lights up `oracle→gateway`, a chaos
+command and its effect report light up opposite directions on the same edge.
+It's inference, not a literal network trace (every SSE event physically
+arrives over the one gateway→browser hop), and the panel says so. Animation
+runs DOM-direct via a new `sendPacket` helper and a side-channel pub/sub
+(`onTopologyEvent` / `emitTopologyEvent`) in `apps/web/src/motion/gsap.js`,
+bypassing the Zustand store entirely so a hot SSE burst doesn't force a
+re-render on every other console panel.
+
 ## The two technical tricks that make it work
 
 **Force horizontal scaling, not vertical.** Zerops scales vertically first —

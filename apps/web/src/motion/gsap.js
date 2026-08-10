@@ -65,6 +65,51 @@ export function tweenNumber(el, from, to, opts = {}) {
   });
 }
 
+/**
+ * Send one animated packet along an SVG path.
+ *
+ * DOM-direct, same reasoning as `tweenNumber`: the caller is an SSE handler
+ * that can fire many times a second during a burst, so this never touches
+ * React state. A `<circle>` is appended straight to the path's own parent,
+ * animated with MotionPathPlugin, then removed on completion -- the DOM node
+ * *is* the packet's entire lifecycle, with no component tracking it.
+ */
+export function sendPacket(pathEl, { duration = 0.9, color = 'var(--containers)', radius = 4 } = {}) {
+  if (!pathEl) return null;
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const dot = document.createElementNS(svgNS, 'circle');
+  dot.setAttribute('r', String(radius));
+  dot.setAttribute('fill', color);
+  dot.setAttribute('class', 'topology-packet');
+  pathEl.parentNode.appendChild(dot);
+
+  return gsap.to(dot, {
+    duration,
+    ease: 'none',
+    motionPath: { path: pathEl, align: pathEl, alignOrigin: [0.5, 0.5] },
+    opacity: 0.9,
+    onStart() { gsap.fromTo(dot, { opacity: 0, scale: 0.4 }, { opacity: 0.9, scale: 1, duration: 0.15 }); },
+    onComplete() { dot.remove(); },
+  });
+}
+
+/**
+ * A one-listener pub/sub for raw SSE events that only the topology panel
+ * cares about, bypassing the Zustand store entirely.
+ *
+ * The store's job is accumulated run state (series, event logs) that every
+ * subscribing component re-renders on. A topology packet is the opposite: a
+ * fire-once animation trigger with no state to keep, and routing it through
+ * `set()` would mean every store subscriber re-renders on every tick just so
+ * one panel can spawn a `<circle>`. `Console.jsx` already owns the one
+ * `openStream` connection and its `handleEvent` switch; this just gives that
+ * switch a second, side-channel place to forward events to, the same way
+ * `tweenNumber` gives a hot numeric readout a path around React state.
+ */
+const topologyListeners = new Set();
+export function onTopologyEvent(fn) { topologyListeners.add(fn); return () => topologyListeners.delete(fn); }
+export function emitTopologyEvent(event, data) { for (const fn of topologyListeners) fn(event, data); }
+
 /** Split a string into per-character spans for stagger reveals. */
 export function splitChars(el) {
   if (!el || el.dataset.split === '1') return [...(el?.querySelectorAll('.ch') || [])];

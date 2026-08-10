@@ -120,7 +120,7 @@ export function openStream(onEvent, opts = {}) {
 
     for (const name of [
       'tick', 'run.created', 'run.armed', 'run.started', 'run.completed',
-      'run.failed', 'scaled', 'phase', 'chaos', 'prediction', 'slo',
+      'run.failed', 'scaled', 'phase', 'chaos', 'prediction', 'finding', 'slo',
       'worker.hello', 'watermark', 'suite.progress', 'replay.end',
     ]) {
       es.addEventListener(name, (e) => {
