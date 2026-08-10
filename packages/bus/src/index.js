@@ -21,13 +21,23 @@ const NATS_URL = process.env.NATS_URL
   || (process.env.nats_hostname ? `nats://${process.env.nats_hostname}:4222` : 'nats://nats:4222');
 
 /**
+ * The nats.js client's `servers` option wants a bare host:port (or an array of
+ * them) with credentials passed separately as `user`/`pass` -- it does not
+ * accept a `nats://user:pass@host:port` URL as a single string. Parse the URL
+ * once here so callers everywhere can keep configuring this with one env var.
+ */
+const parsedNatsUrl = new URL(NATS_URL);
+
+/**
  * Connect with settings tuned for a fleet that scales underneath you:
  * infinite reconnect, jittered backoff, and a name so `nats server report
  * connections` is readable when you're debugging at hour six.
  */
 export async function connectBus(name) {
   const nc = await connect({
-    servers: NATS_URL,
+    servers: `nats://${parsedNatsUrl.hostname}:${parsedNatsUrl.port}`,
+    user: parsedNatsUrl.username || undefined,
+    pass: parsedNatsUrl.password ? decodeURIComponent(parsedNatsUrl.password) : undefined,
     name: `scalescope-${name}`,
     maxReconnectAttempts: -1,
     reconnectTimeWait: 500,
@@ -35,7 +45,7 @@ export async function connectBus(name) {
     pingInterval: 10_000,
   });
 
-  log.info(`bus connected to ${NATS_URL} as ${name}`);
+  log.info(`bus connected to ${parsedNatsUrl.hostname}:${parsedNatsUrl.port} as ${name}`);
 
   (async () => {
     for await (const s of nc.status()) {

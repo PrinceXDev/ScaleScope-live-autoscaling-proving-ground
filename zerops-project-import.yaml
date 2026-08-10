@@ -39,7 +39,7 @@ services:
     priority: 10
 
   - hostname: metrics
-    type: clickhouse@25
+    type: clickhouse@25.3
     mode: NON_HA
     priority: 10
 
@@ -49,7 +49,7 @@ services:
     priority: 10
 
   - hostname: nats
-    type: nats@2
+    type: nats@2.12
     mode: NON_HA
     priority: 10
 

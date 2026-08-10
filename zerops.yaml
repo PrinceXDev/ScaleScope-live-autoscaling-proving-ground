@@ -33,6 +33,11 @@ zerops:
           httpSupport: true
       envVariables:
         SCALESCOPE_SERVICE: gateway
+        DATABASE_URL: ${db_connectionString}
+        VALKEY_URL: ${cache_connectionString}
+        CLICKHOUSE_USER: ${metrics_user}
+        CLICKHOUSE_PASSWORD: ${metrics_password}
+        NATS_URL: ${nats_connectionString}
       start: node apps/gateway/src/index.js
 
   - setup: collector
@@ -50,6 +55,10 @@ zerops:
           httpSupport: true
       envVariables:
         SCALESCOPE_SERVICE: collector
+        VALKEY_URL: ${cache_connectionString}
+        CLICKHOUSE_USER: ${metrics_user}
+        CLICKHOUSE_PASSWORD: ${metrics_password}
+        NATS_URL: ${nats_connectionString}
       start: node apps/collector/src/index.js
 
   - setup: worker
@@ -67,6 +76,7 @@ zerops:
           httpSupport: true
       envVariables:
         SCALESCOPE_SERVICE: worker
+        NATS_URL: ${nats_connectionString}
       start: node apps/worker/src/index.js
 
   - setup: target
@@ -101,6 +111,8 @@ zerops:
           httpSupport: true
       envVariables:
         SCALESCOPE_SERVICE: oracle
+        DATABASE_URL: ${db_connectionString}
+        NATS_URL: ${nats_connectionString}
       start: node apps/oracle/src/index.js
 
   - setup: chaos
@@ -118,6 +130,8 @@ zerops:
           httpSupport: true
       envVariables:
         SCALESCOPE_SERVICE: chaos
+        VALKEY_URL: ${cache_connectionString}
+        NATS_URL: ${nats_connectionString}
       start: node apps/chaos/src/index.js
 
   - setup: scheduler
@@ -135,6 +149,8 @@ zerops:
           httpSupport: true
       envVariables:
         SCALESCOPE_SERVICE: scheduler
+        DATABASE_URL: ${db_connectionString}
+        NATS_URL: ${nats_connectionString}
         # Nightly regression is off by default -- see apps/scheduler/src/cron.js.
         # Set to an hour 0-23 (UTC) to enable, or add a crontab entry below.
         REGRESSION_CRON_HOUR: ''

@@ -15,20 +15,20 @@ cleanly. See `DEPLOY.md` for the fastest path to a live, public demo, and the
 
 Twelve services. Every one is load-bearing — none is here to pad the count.
 
-| Service | Type | Role |
-|---|---|---|
-| `web` | static | Story (landing), live Console, and the Lab (envelope/compare) |
-| `gateway` | nodejs | Control plane — admission, the two-phase start barrier, SSE fan-out, REST |
-| `collector` | nodejs | Ingest — merges fleet samples into tick frames, writes ClickHouse |
-| `worker` | nodejs | Load fleet — fires the profile, or runs the latency-target autopilot |
-| `target` | nodejs | The service under test — this is what Zerops scales |
-| `oracle` | nodejs | Autoscaler digital twin — predicts the container count ~15s ahead |
-| `chaos` | nodejs | Fault injector — kill / degrade / partition the target on command |
-| `scheduler` | nodejs | Runs unattended experiment suites through the gateway's own API |
-| `nats` | broker | Commands fan out, telemetry fans in, the run log streams (JetStream) |
-| `db` | postgresql | Write model — run registry, suites, twin parameters |
-| `metrics` | clickhouse | Read model — every observed sample, queried by aggregate |
-| `cache` | valkey | Live materialized view — rolling container window, locks, credit budget |
+| Service     | Type       | Role                                                                      |
+| ----------- | ---------- | ------------------------------------------------------------------------- |
+| `web`       | static     | Story (landing), live Console, and the Lab (envelope/compare)             |
+| `gateway`   | nodejs     | Control plane — admission, the two-phase start barrier, SSE fan-out, REST |
+| `collector` | nodejs     | Ingest — merges fleet samples into tick frames, writes ClickHouse         |
+| `worker`    | nodejs     | Load fleet — fires the profile, or runs the latency-target autopilot      |
+| `target`    | nodejs     | The service under test — this is what Zerops scales                       |
+| `oracle`    | nodejs     | Autoscaler digital twin — predicts the container count ~15s ahead         |
+| `chaos`     | nodejs     | Fault injector — kill / degrade / partition the target on command         |
+| `scheduler` | nodejs     | Runs unattended experiment suites through the gateway's own API           |
+| `nats`      | broker     | Commands fan out, telemetry fans in, the run log streams (JetStream)      |
+| `db`        | postgresql | Write model — run registry, suites, twin parameters                       |
+| `metrics`   | clickhouse | Read model — every observed sample, queried by aggregate                  |
+| `cache`     | valkey     | Live materialized view — rolling container window, locks, credit budget   |
 
 ```
 web (Story / Console / Lab)
@@ -231,7 +231,7 @@ Each should log a `booting <name>` line followed by `<name> ready` within a
 couple of seconds, tagged correctly (`[gateway]`, `[worker]`, etc. — see
 `TESTING.md` for why that tag being correct is itself a thing worth checking).
 If any service instead logs a stack trace and exits, the infrastructure isn't
-reachable yet — re-check step 3 and that `.env` is loaded in *that* terminal.
+reachable yet — re-check step 3 and that `.env` is loaded in _that_ terminal.
 
 ### 6. Start the dashboard
 
@@ -286,98 +286,10 @@ load generation, ingest, event log, finalisation — is working end to end.
 ```bash
 docker compose down -v     # -v also drops the data volumes, for a clean slate next time
 ```
+
 Ctrl-C each of the eight `npm run start:*` / `dev:web` terminals.
 
 ---
-
-## Deploying to Zerops
-
-This is the real demo — the local run above proves the code; this is what a
-judge actually opens. Full detail on every step below; `DEPLOY.md` has the
-condensed version if you've done this once already and just want the command
-list.
-
-### 1. Create the project
-
-```bash
-zcli login <your-access-token>
-zcli project project-import zerops-project-import.yaml
-```
-
-Or: Zerops GUI → **Import a project** → paste the contents of
-`zerops-project-import.yaml`. Either way this creates all twelve services —
-`db`, `metrics`, `cache`, and `nats` come up immediately with no code needed;
-the eight app services exist but are empty until you push to them.
-
-**Before you do this**, skim the comments at the top of
-`zerops-project-import.yaml` and confirm the version tags
-(`nodejs@22`, `postgresql@16`, `clickhouse@25`, `valkey@7.2`, `nats@2`) are
-still current against the Zerops docs — these do occasionally change, and if
-one is stale the import will fail and name the exact bad value, which is easy
-to fix and re-run.
-
-### 2. Push code to the five services that matter most
-
-```bash
-cd scalescope        # repo root — this matters, see the comment in zerops.yaml
-zcli push --setup gateway
-zcli push --setup collector
-zcli push --setup worker
-zcli push --setup target
-zcli push --setup web
-```
-
-Every push reads the *same* root `zerops.yaml`, picking its own `setup:`
-block by name — this is an npm-workspaces monorepo, so the build has to run
-`npm ci` at the repo root for the shared `packages/*` to link, which is why
-there isn't a separate `zerops.yaml` per service folder. Each push takes a
-minute or two; watch the build log in the Zerops GUI for the first one to
-make sure `npm ci` succeeds before firing off the rest.
-
-### 3. Wire the dashboard to the gateway's public URL
-
-In the Zerops GUI, open `gateway` → enable **subdomain access** if the import
-didn't already (it's set in the YAML, but double-check) → copy its public
-URL. Then, locally:
-
-```bash
-# edit apps/web/public/config.json
-{ "apiUrl": "https://gateway-scalescope-xxxx.prg1.zerops.app" }
-```
-
-```bash
-zcli push --setup web
-```
-
-This is a static-file edit and a redeploy of `web` only — not a rebuild of
-the whole bundle, and not something that touches any other service. See the
-comment in `apps/web/index.html` for why the API URL is resolved at runtime
-from this file rather than baked into the JS bundle at build time.
-
-### 4. Verify
-
-Open `web`'s own public URL (enable subdomain access on it too, if not
-already) in a private browser window. You should see the Story page. Go to
-`#/console`, start a short run, and watch the container count. Cross-check
-against the Zerops GUI's own container count for the `target` service — they
-should track each other within a few seconds.
-
-If `target` never scales past one container even under real load, see
-"Tuning autoscaling" below before assuming something's broken.
-
-### 5. Add the remaining three services whenever you're ready
-
-```bash
-zcli push --setup oracle
-zcli push --setup chaos
-zcli push --setup scheduler
-```
-
-Independent consumers of the same NATS subjects everything else already
-publishes to — adding them touches nothing that's already live, and running
-without them (skip this step entirely) costs you only the prediction ghost
-line, fault injection, and unattended suites, none of which the core "watch
-it scale" demo depends on.
 
 ### Tuning autoscaling
 
@@ -405,15 +317,15 @@ If `target` isn't scaling under real load:
 Set automatically by the project import YAML — no manual step needed unless
 you're changing a default:
 
-| Variable | Service(s) | Default | Purpose |
-|---|---|---|---|
-| `MAX_RUNS_PER_HOUR` | gateway | `12` | Hard ceiling on runs/hour, enforced in Valkey |
-| `SUITE_MAX_RUNS` | scheduler | `8` | Runs a single suite may spend |
-| `SUITE_MAX_TOTAL_S` | scheduler | `900` | Wall-clock ceiling on a single suite |
-| `CHAOS_SECRET` | target, chaos | generated at import | Shared auth for `/admin/*` on target |
-| `GATEWAY_URL` | scheduler | `http://gateway:3000` | Where suites start runs |
-| `TARGET_ADMIN_URL` | chaos | `http://target:3000` | Where chaos sends fault commands |
-| `NATS_URL` | all | `nats://nats:4222` | Internal hostname, no change needed |
+| Variable            | Service(s)    | Default               | Purpose                                       |
+| ------------------- | ------------- | --------------------- | --------------------------------------------- |
+| `MAX_RUNS_PER_HOUR` | gateway       | `12`                  | Hard ceiling on runs/hour, enforced in Valkey |
+| `SUITE_MAX_RUNS`    | scheduler     | `8`                   | Runs a single suite may spend                 |
+| `SUITE_MAX_TOTAL_S` | scheduler     | `900`                 | Wall-clock ceiling on a single suite          |
+| `CHAOS_SECRET`      | target, chaos | generated at import   | Shared auth for `/admin/*` on target          |
+| `GATEWAY_URL`       | scheduler     | `http://gateway:3000` | Where suites start runs                       |
+| `TARGET_ADMIN_URL`  | chaos         | `http://target:3000`  | Where chaos sends fault commands              |
+| `NATS_URL`          | all           | `nats://nats:4222`    | Internal hostname, no change needed           |
 
 Injected automatically by Zerops per data-tier service, read directly by
 `packages/stores/*` — never needs manual configuration on Zerops:

@@ -1,4 +1,4 @@
 {
-  "apiUrl": "",
+  "apiUrl": "https://gateway-2e58-3000.prg1.zerops.app",
   "_comment": "Set apiUrl to your deployed gateway service's public URL, e.g. https://gateway-scalescope-xyz.prg1.zerops.app. Leave empty to use same-origin /api (correct when the gateway is behind the same domain). Editing this file needs only a static redeploy, not a rebuild."
 }
