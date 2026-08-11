@@ -136,19 +136,25 @@ export const useStore = create((set, get) => ({
       pendingBet = null;
     }
 
-    const series = s.series;
-    series.t.push(f.t);
-    series.rps.push(f.rps);
-    series.p95.push(f.p95);
-    series.p50.push(f.p50);
-    series.containers.push(f.containers);
-    series.predicted.push(f.predicted ?? null);
-    series.errors.push(f.errors);
-    series.concurrency.push(f.concurrency);
-
-    if (series.t.length > MAX_POINTS) {
-      for (const k of Object.keys(series)) series[k].shift();
-    }
+    // New array references, not in-place push/shift: TimelineChart's redraw
+    // effect depends on these arrays by identity ([t, containers, rps, p95,
+    // predicted]), and a mutated-in-place array is `Object.is`-equal to
+    // itself on every render, so React would never see a change and the
+    // chart would draw once, empty, and then never again.
+    const prevSeries = s.series;
+    const appended = {
+      t: [...prevSeries.t, f.t],
+      rps: [...prevSeries.rps, f.rps],
+      p95: [...prevSeries.p95, f.p95],
+      p50: [...prevSeries.p50, f.p50],
+      containers: [...prevSeries.containers, f.containers],
+      predicted: [...prevSeries.predicted, f.predicted ?? null],
+      errors: [...prevSeries.errors, f.errors],
+      concurrency: [...prevSeries.concurrency, f.concurrency],
+    };
+    const series = appended.t.length > MAX_POINTS
+      ? Object.fromEntries(Object.entries(appended).map(([k, arr]) => [k, arr.slice(1)]))
+      : appended;
 
     const instances = s.instances;
     for (const inst of f.instances || []) {
@@ -170,7 +176,7 @@ export const useStore = create((set, get) => ({
       phase: f.phase,
       ingestLagMs: f.ingestLagMs ?? s.ingestLagMs,
       costUsd: f.costUsd ?? s.costUsd,
-      series: { ...series },
+      series,
       instances: new Map(instances),
       pendingBet,
       betHistory,

@@ -1,8 +1,10 @@
-# The oracle's bet, and the autoscaler report card
+# The oracle's bet, the autoscaler report card, and the golden run
 
-Detailed reference for the two features summarized in `README.md`. Both are
-projections of the same durable event log everything else in this project
-reads from — neither introduces a second source of truth.
+Detailed reference for three features summarized in `README.md`. The first
+two are projections of the same durable event log everything else in this
+project reads from — neither introduces a second source of truth. The third
+is the opposite kind of thing on purpose: a static snapshot that needs no
+projection, no log, and no backend at all.
 
 ---
 
@@ -207,3 +209,149 @@ come back `null` for that pass rather than the script failing outright.
 `v: 1` exists so a future change to the metric set or scoring bounds can be
 told apart from runs graded under the old method, without needing a
 migration to add the field after the fact.
+
+---
+
+## The golden run
+
+**Where:** `apps/web/src/lib/goldenReplay.js` (the player),
+`apps/web/public/golden-run.json` (the fixture, a static asset),
+`infra/scripts/export-golden-run.mjs` (the tool that produces the fixture
+from a real run), wired into the fallback path in `apps/web/src/views/Story.jsx`.
+
+### What it does, and why it exists
+
+Judging is asynchronous and happens on someone else's schedule, not yours.
+The live showcase (`GET /api/runs/showcase` → a real replay off JetStream) is
+a great demo when the backend is warm — and a blank chart the moment
+ClickHouse is cold, the hourly run budget is spent, Postgres hiccups, or
+Zerops itself is having a bad afternoon. The golden run is the fallback that
+cannot fail: one real run's event log, frozen into a JSON file, shipped as a
+static asset in the same deploy as the page that reads it. Playing it back
+needs nothing more than the browser having already loaded the site — no
+gateway request, no NATS, no Postgres, no ClickHouse, at view time.
+
+It's clearly labeled as a recording wherever it appears — the Story page's
+attract-mode panel reads "golden run — replaying "..."" with a note reading
+"no live backend needed — recorded fixture, plays from a static file, on
+loop", distinct from the live-showcase copy ("attract mode — replaying
+"..."" / "this is a past run, on loop"). The distinction matters: this
+project's whole premise is measuring something real, and a recording
+pretending to be live would undercut that. It never claims to be live.
+
+### Why client-side, not a gateway replay endpoint
+
+The obvious approach — teach `apps/gateway/src/replay.js`'s `replayRun()` to
+read a committed JSON file instead of JetStream when live infra is down —
+was considered and rejected. The gateway process itself doesn't survive NATS
+being unreachable: `connectBus()` in `apps/gateway/src/index.js` performs a
+blocking connect with no surrounding try/catch, so a gateway that can't reach
+NATS never finishes booting, and a golden-run route served *by that process*
+would be exactly as unavailable as everything else. The only thing on this
+project's whole stack that can boot independently of every backing service
+is `web` itself, since it's a static Vite build — so that's where the
+fallback lives. This makes the guarantee unconditional rather than "usually
+works": the golden run only depends on the static file host being up, which
+is the same dependency the rest of the page already has.
+
+### The player: a client-side twin of `replayRun`'s pacing
+
+`playGoldenRun(onEvent, opts)` in `goldenReplay.js` mirrors
+`replayRun()`'s pacing loop exactly:
+
+- Same gap computation: `gap = min(MAX_GAP_MS, max(0, emittedAt[i] - emittedAt[i-1]))`, divided by `speed`.
+- Same `MAX_GAP_MS` (2000ms), same speed clamp (`[0.25, 20]`).
+- Same event-name mapping (`SSE_NAME_FOR_EVENT`, inlined rather than imported
+  from `@scalescope/contracts` — this file has zero dependency on the
+  backend's own packages, deliberately, so a change to the contracts package
+  can never silently break the one code path guaranteed to work when
+  everything else is down).
+- Same calling convention as `openStream()`: `(event, data) => void`, and a
+  returned stop function.
+
+If you change the pacing algorithm in `replay.js`, change it here too, or
+the golden run stops feeling like the same product as a live replay — that
+parity is the entire design intent, not an incidental similarity.
+
+One deliberate addition: `{ loop: true }` replays the fixture forever, since
+this is attract-mode content meant to never go idle — the live showcase path
+in `Story.jsx` re-opens a fresh replay stream on `replay.end` to get the same
+effect; `playGoldenRun` just does it internally.
+
+### Fallback logic in `Story.jsx`
+
+Attract mode is a small state machine (`{ mode: 'pending' | 'live' | 'golden', name }`)
+with three trigger conditions for falling back to the golden run:
+
+1. `api.showcase()` rejects, or resolves `null` (no completed run exists at all).
+2. `api.showcase()` succeeds, a live replay stream opens, but no `tick` event
+   arrives within `LIVE_WATCHDOG_MS` (4 seconds) — this is the case a naive
+   `.catch()` on the fetch alone would miss: Postgres can be healthy while
+   NATS is unreachable, in which case the SSE connection opens fine and
+   simply never emits anything.
+3. The live replay's `replay.end` fires having never produced a first frame
+   (an empty or degraded replay-from-timeline fallback, e.g. a run whose
+   JetStream log aged out and whose ClickHouse rollup is also unavailable).
+
+Once live data arrives (`gotFirstFrame = true`), the watchdog is cleared and
+the live path is trusted for the rest of that session — the golden run is a
+fallback, not a competing default, and the live path is always preferred
+when it's actually working.
+
+### Producing the fixture
+
+```bash
+npm run export-golden-run -- <runId>
+```
+
+Requires Postgres and JetStream (the same infra `readRunEvents` — the
+gateway's own replay-log reader, reused rather than re-derived — needs to
+read a real run). Writes `apps/web/public/golden-run.json`, then the file is
+committed by hand. This is a deliberate one-time snapshot of your best
+recorded run, not something regenerated on every deploy — pick a run that
+actually tells the story (a clean scale-up staircase, a chaos kill and
+recovery, a good report-card grade) and freeze it.
+
+### Fixture shape
+
+```js
+// apps/web/public/golden-run.json
+{
+  v: 1,
+  recordedAt: "2026-...",       // ISO timestamp, when the fixture was exported
+  run: {
+    id, name, profile, peakContainers, peakRps, peakP95Ms,
+    timeToRecoverS, totalRequests, estCostUsd, grade,   // grade from runs.scorecard, if present
+  },
+  events: [
+    { type: 'created' | 'armed' | 'started' | 'tick' | 'scaled' | 'phase'
+           | 'chaos' | 'prediction' | 'finding' | 'slo' | 'completed' | 'failed',
+      data: /* same payload shape as the live event, see packages/contracts/src/events.js */,
+      emittedAt: number,  // epoch ms, used for pacing -- the only field the player reads besides type/data
+    },
+    ...
+  ],
+}
+```
+
+Each event is stripped down from the JetStream envelope
+(`{ v, runId, type, producer, emittedAt, data }`) to exactly what playback
+needs — `type`, `data`, `emittedAt` — dropping `v`, `runId`, `producer`, and
+the outer `seq`/`subject` wrapper `readRunEvents` returns, none of which the
+pacing loop or the SSE-name lookup ever touch.
+
+### A bug this feature surfaced and fixed
+
+Verifying the golden run's chart actually rendered data — not just that
+events were flowing, which they were — surfaced a real, pre-existing bug
+affecting the live console and live replay too, not just this feature:
+`store.js`'s `ingestTick` mutated its `series` arrays in place
+(`series.t.push(...)`) and returned a shallow-copied wrapper object. Since
+`TimelineChart`'s redraw effect depends on the arrays themselves
+(`[t, containers, rps, p95, predicted]`), and a mutated-in-place array is
+`Object.is`-equal to itself on every render, React never saw a change after
+the first render — the chart drew once, empty, and then silently never
+again, on every path (live console, live replay, story attract mode). Fixed
+by building fresh array references on each tick instead of mutating in
+place. Confirmed against the actual deployed demo, not just synthetic data,
+before and after the fix.

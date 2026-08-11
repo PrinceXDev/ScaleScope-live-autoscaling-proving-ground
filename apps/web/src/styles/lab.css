@@ -82,8 +82,10 @@
   margin-bottom: 6px;
 }
 
+.mini-timeline-wrap { position: relative; }
 .accuracy-trend { height: 120px; }
-.accuracy-trend-empty {
-  height: 120px; display: flex; align-items: center; justify-content: center;
+.mini-timeline-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   color: var(--fg-faint); font-size: 13px; border: 1px dashed var(--line-solid); border-radius: var(--r-sm);
+  background: var(--bg-1);
 }

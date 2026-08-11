@@ -4,6 +4,7 @@ import { gsap, splitChars } from '../motion/gsap.js';
 import { useReducedMotion } from '../motion/useMotionPref.js';
 import { href } from '../lib/router.js';
 import { api, openStream } from '../lib/api.js';
+import { playGoldenRun, goldenRunInfo } from '../lib/goldenReplay.js';
 import { useStore } from '../lib/store.js';
 import TimelineChart from '../components/TimelineChart.jsx';
 import '../styles/story.css';
@@ -29,10 +30,14 @@ import '../styles/story.css';
  * same TimelineChart component the console uses, so a visitor sees the product
  * work before they've clicked anything.
  */
+/** How long to wait for the live showcase's first frame before falling back to the golden run. */
+const LIVE_WATCHDOG_MS = 4000;
+
 export default function Story() {
   const reduced = useReducedMotion();
   const heroRef = useRef(null);
   const [showcase, setShowcase] = useState(null);
+  const [attract, setAttract] = useState({ mode: 'pending', name: null });
   const store = useStore();
   const closeRef = useRef(null);
 
@@ -58,25 +63,64 @@ export default function Story() {
   }, [reduced]);
 
   useEffect(() => {
-    api.showcase().then(setShowcase).catch(() => {});
+    api.showcase().then(setShowcase).catch(() => setShowcase(null));
   }, []);
 
+  /**
+   * Attract mode has exactly one job: never show an empty chart. It tries the
+   * live showcase first -- a real run replayed off the gateway's own JetStream
+   * log, the same code path the console uses -- and falls back to the golden
+   * run, a static fixture that plays with zero backend involvement, if the
+   * live path is unavailable or doesn't produce a first frame quickly.
+   *
+   * "Unavailable" covers more than `api.showcase()` rejecting: Postgres could
+   * answer fine while NATS is down, in which case the SSE connection opens
+   * but no `tick` ever arrives. The watchdog below is what catches that case
+   * -- a promise rejection alone would miss it entirely.
+   */
   useEffect(() => {
-    if (!showcase?.id) return;
+    let cancelled = false;
+    let watchdog = null;
+
+    const playGolden = () => {
+      if (cancelled) return;
+      closeRef.current?.();
+      store.resetRun(null, null, 'story');
+      setAttract({ mode: 'golden', name: null });
+      goldenRunInfo().then((run) => { if (!cancelled) setAttract({ mode: 'golden', name: run?.name ?? null }); }).catch(() => {});
+      closeRef.current = playGoldenRun((event, data) => {
+        if (event === 'tick') useStore.getState().ingestTick(data);
+      }, { speed: 3, loop: true });
+    };
+
+    if (!showcase?.id) {
+      // showcase resolved to null (no completed run, or the fetch itself
+      // failed) -- no point waiting on a watchdog for a stream we never open.
+      playGolden();
+      return () => { cancelled = true; closeRef.current?.(); };
+    }
+
     store.resetRun(showcase.id, null, 'story');
-    closeRef.current?.();
+    setAttract({ mode: 'live', name: showcase.name });
+    let gotFirstFrame = false;
+
+    watchdog = setTimeout(() => { if (!gotFirstFrame) playGolden(); }, LIVE_WATCHDOG_MS);
+
     closeRef.current = openStream((event, data) => {
-      const s = useStore.getState();
-      if (event === 'tick') s.ingestTick(data);
+      if (event === 'tick') { gotFirstFrame = true; clearTimeout(watchdog); useStore.getState().ingestTick(data); }
       if (event === 'replay.end') {
         // Loop the attract-mode replay so the landing page never goes idle.
-        setTimeout(() => { closeRef.current?.(); closeRef.current = openStream(
+        // A replay that ended without ever emitting a tick (empty/degraded)
+        // is itself a live-path failure worth falling back from.
+        if (!gotFirstFrame) { playGolden(); return; }
+        setTimeout(() => { if (!cancelled) { closeRef.current?.(); closeRef.current = openStream(
           (e2, d2) => { if (e2 === 'tick') useStore.getState().ingestTick(d2); },
           { runId: showcase.id, replay: true, speed: 3 },
-        ); }, 1500);
+        ); } }, 1500);
       }
     }, { runId: showcase.id, replay: true, speed: 3 });
-    return () => closeRef.current?.();
+
+    return () => { cancelled = true; clearTimeout(watchdog); closeRef.current?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showcase?.id]);
 
@@ -98,9 +142,17 @@ export default function Story() {
       <section className="attract">
         <div className="panel-head" style={{ border: 'none', padding: '0 0 12px' }}>
           <span className="panel-title">
-            {showcase ? `attract mode — replaying "${showcase.name}"` : 'attract mode'}
+            {attract.mode === 'golden'
+              ? `golden run — replaying "${attract.name ?? 'a recorded run'}"`
+              : attract.mode === 'live'
+                ? `attract mode — replaying "${attract.name}"`
+                : 'attract mode'}
           </span>
-          <span className="panel-note mono">no run active — this is a past run, on loop</span>
+          <span className="panel-note mono">
+            {attract.mode === 'golden'
+              ? 'no live backend needed — recorded fixture, plays from a static file, on loop'
+              : 'no run active — this is a past run, on loop'}
+          </span>
         </div>
         <div className="panel">
           <div className="panel-body">

@@ -56,6 +56,13 @@ export default function AccuracyTrend({ pairs = [], height = 120 }) {
     ro.observe(holderRef.current);
 
     return () => { ro.disconnect(); plotRef.current?.destroy(); plotRef.current = null; };
+    // The chart holder below is always rendered -- never swapped for an empty-
+    // state placeholder -- specifically so this ref is non-null the one time
+    // this effect runs. A conditional early return before this div would mean
+    // the mount effect fires against a ref that is still null when there are
+    // fewer than 2 pairs (true on a run's first tick), and since this effect
+    // only runs once, the chart would never get a second chance to mount once
+    // enough pairs arrive.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -64,9 +71,10 @@ export default function AccuracyTrend({ pairs = [], height = 120 }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pairs]);
 
-  if (pairs.length < 2) {
-    return <div className="accuracy-trend-empty">not enough samples yet to plot a trend</div>;
-  }
-
-  return <div className="chart accuracy-trend" ref={holderRef} />;
+  return (
+    <div className="mini-timeline-wrap">
+      <div className="chart accuracy-trend" ref={holderRef} />
+      {pairs.length < 2 && <div className="mini-timeline-empty">not enough samples yet to plot a trend</div>}
+    </div>
+  );
 }

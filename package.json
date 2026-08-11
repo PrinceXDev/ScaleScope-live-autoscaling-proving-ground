@@ -14,6 +14,7 @@
   "scripts": {
     "check": "node infra/scripts/check-syntax.mjs",
     "recompute-scorecards": "node infra/scripts/recompute-scorecards.mjs",
+    "export-golden-run": "node infra/scripts/export-golden-run.mjs",
     "build:web": "npm run build -w @scalescope/web",
     "dev:web": "npm run dev -w @scalescope/web",
     "start:gateway": "node apps/gateway/src/index.js",

@@ -3,8 +3,11 @@ import { api, openStream } from '../lib/api.js';
 import { useStore } from '../lib/store.js';
 import { emitTopologyEvent } from '../motion/gsap.js';
 import TimelineChart from '../components/TimelineChart.jsx';
+import MiniTimeline from '../components/MiniTimeline.jsx';
+import AccuracyTrend from '../components/AccuracyTrend.jsx';
 import StatTile from '../components/StatTile.jsx';
 import PredictionBet from '../components/PredictionBet.jsx';
+import Explain from '../components/Explain.jsx';
 import ReportCard from '../components/ReportCard.jsx';
 import ContainerGrid from '../components/ContainerGrid.jsx';
 import EventTicker from '../components/EventTicker.jsx';
@@ -118,22 +121,85 @@ export default function Console({ replayRunId = null }) {
               findingEvents={store.findingEvents}
             />
             <div className="chart-legend">
-              <span><i style={{ background: 'var(--containers)' }} />containers</span>
-              <span><i style={{ background: 'var(--throughput)' }} />req/s</span>
-              <span><i style={{ background: 'var(--latency)' }} />p95 ms</span>
-              <span><i style={{ background: 'var(--predicted)', borderStyle: 'dashed' }} />predicted</span>
-              <span><i style={{ background: 'var(--finding)' }} />finding</span>
+              <span>
+                <i style={{ background: 'var(--containers)' }} />containers
+                <Explain label="containers">Distinct container IDs that answered a request in the last 10 seconds — measured from response headers, not reported by the platform.</Explain>
+              </span>
+              <span>
+                <i style={{ background: 'var(--throughput)' }} />req/s
+                <Explain label="req/s">Requests completed by the whole worker fleet in the last one-second bucket.</Explain>
+              </span>
+              <span>
+                <i style={{ background: 'var(--latency)' }} />p95 ms
+                <Explain label="p95 ms">95th-percentile response latency this second — 95% of requests finished at or below this time.</Explain>
+              </span>
+              <span>
+                <i style={{ background: 'var(--predicted)', borderStyle: 'dashed' }} />predicted
+                <Explain label="predicted">The digital twin's forecast of the container count 15 seconds ahead, drawn ahead of where reality has reached yet. See "the oracle's bet" panel to watch this forecast get scored.</Explain>
+              </span>
+              <span>
+                <i style={{ background: 'var(--finding)' }} />finding
+                <Explain label="finding">Marks a moment the oracle's 15-second-ahead forecast missed reality by more than its own error threshold — a genuine divergence between the model and the platform's actual behaviour, not just noise.</Explain>
+              </span>
             </div>
           </div>
         </section>
 
         <div className="stat-row">
-          <StatTile label="containers" value={store.frame?.containers ?? 0} color="var(--containers)" note={`peak ${store.peak.containers}`} />
-          <StatTile label="req/s" value={store.frame?.rps ?? 0} color="var(--throughput)" note={`peak ${Math.round(store.peak.rps)}`} />
-          <StatTile label="p95" value={store.frame?.p95 ?? 0} unit="ms" color="var(--latency)" note={`peak ${Math.round(store.peak.p95)}`} />
-          <StatTile label="cost" value={store.costUsd} unit="usd" decimals={4} color="var(--cost)" note="estimated" />
-          <StatTile label="time to recover" value={store.timeToRecoverS ?? '—'} unit={store.timeToRecoverS ? 's' : ''} color="var(--good)" />
+          <StatTile
+            label="containers" value={store.frame?.containers ?? 0} color="var(--containers)"
+            note={`peak ${store.peak.containers}`}
+            explain="Distinct container IDs that answered a request in the last 10 seconds. Every target container mints a UUID at boot and returns it in an X-Instance-Id header — this counts unique IDs seen in that rolling window, not a number reported by the platform. Peak is the highest count reached so far this run."
+          />
+          <StatTile
+            label="req/s" value={store.frame?.rps ?? 0} color="var(--throughput)"
+            note={`peak ${Math.round(store.peak.rps)}`}
+            explain="Requests completed by the whole worker fleet in the last one-second bucket, summed across every worker. Peak is the highest one-second rate reached so far this run."
+          />
+          <StatTile
+            label="p95" value={store.frame?.p95 ?? 0} unit="ms" color="var(--latency)"
+            note={`peak ${Math.round(store.peak.p95)}`}
+            explain="95th-percentile response latency this second: 95% of requests finished at or below this many milliseconds, 5% took longer. Computed from a live histogram across the whole fleet, not averaged — a single slow container can't hide behind fast ones. Peak is the worst p95 reached so far this run."
+          />
+          <StatTile
+            label="cost" value={store.costUsd} unit="usd" decimals={4} color="var(--cost)"
+            note="estimated"
+            explain="Container-seconds run so far this run, multiplied by an assumed $0.012 per container-hour. This is a modeled estimate to make cost trade-offs visible during a run, not a real invoice from Zerops — see COST_PER_CONTAINER_HOUR_USD in packages/contracts."
+          />
+          <StatTile
+            label="time to recover" value={store.timeToRecoverS ?? '—'} unit={store.timeToRecoverS ? 's' : ''} color="var(--good)"
+            explain="Seconds between the run's SLO first being breached (p95 over the run's configured threshold) and it first recovering back under that threshold. Stays em-dash until both a breach and a recovery have happened this run."
+          />
         </div>
+
+        <section className="panel">
+          <header className="panel-head">
+            <span className="panel-title">Error rate</span>
+            <Explain label="error rate">Failed requests per second (red) against total requests per second (cyan), on the same one-second buckets as the main timeline. A run with zero errors draws a flat line at 0 — that's the goal, not a rendering placeholder.</Explain>
+          </header>
+          <div className="panel-body">
+            <MiniTimeline
+              t={store.series.t}
+              series={[
+                { label: 'errors/s', data: store.series.errors, color: 'var(--breach)' },
+                { label: 'req/s', data: store.series.rps, color: 'var(--throughput)', scale: 'rps' },
+              ]}
+            />
+          </div>
+        </section>
+
+        <section className="panel">
+          <header className="panel-head">
+            <span className="panel-title">Concurrency</span>
+            <Explain label="concurrency">The autopilot's actual control output: how many requests it's keeping in flight against the fleet this second, adjusted every tick to chase the run's latency setpoint. This is the number driving scale decisions, not a byproduct of them.</Explain>
+          </header>
+          <div className="panel-body">
+            <MiniTimeline
+              t={store.series.t}
+              series={[{ label: 'concurrency', data: store.series.concurrency, color: 'var(--predicted)', fill: true }]}
+            />
+          </div>
+        </section>
 
         {store.status === 'completed' && <ReportCard scorecard={store.scorecard} />}
 

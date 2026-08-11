@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import StatTile from './StatTile.jsx';
+import AccuracyTrend from './AccuracyTrend.jsx';
 
 /**
  * The oracle's prediction, staged as a committed bet rather than a line on a
@@ -62,9 +63,25 @@ export default function PredictionBet({ pendingBet, betHistory, betAccuracy }) {
         )}
 
         <div className="stat-row bet-accuracy-row">
-          <StatTile label="mean abs error" value={betAccuracy.mae} unit="ctr" decimals={2} color="var(--predicted)" />
-          <StatTile label="hit rate ±1" value={betAccuracy.n ? betAccuracy.hitRate * 100 : 0} unit="%" decimals={0} color="var(--good)" note={`${betAccuracy.n} bets`} />
+          <StatTile
+            label="mean abs error" value={betAccuracy.mae} unit="ctr" decimals={2} color="var(--predicted)"
+            explain="Average, across every resolved bet this run, of |predicted containers − actual containers| at the moment each bet came due. Lower is better; 0 would mean the oracle has been exactly right every time."
+          />
+          <StatTile
+            label="hit rate ±1" value={betAccuracy.n ? betAccuracy.hitRate * 100 : 0} unit="%" decimals={0} color="var(--good)"
+            note={`${betAccuracy.n} bets`}
+            explain="Share of resolved bets where the oracle's forecast was within 1 container of what actually happened 15 seconds later. A little looser than exact-match on purpose — a single container of scheduling jitter isn't a modeling failure, see docs/features.md."
+          />
         </div>
+
+        {betHistory.length >= 2 && (
+          <>
+            <div className="bet-trend-head">
+              <span>error per bet, oldest to newest this run</span>
+            </div>
+            <AccuracyTrend pairs={betHistory} height={100} />
+          </>
+        )}
       </div>
     </section>
   );

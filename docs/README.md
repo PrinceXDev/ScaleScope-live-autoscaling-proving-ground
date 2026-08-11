@@ -9,7 +9,7 @@ five-minute orientation. Everything below is the detailed reference.
 | [`running-locally.md`](./running-locally.md) | Step-by-step: install, start local infra, start every service, run a load test, see the oracle's bet and the report card, tear down |
 | [`deploy.md`](./deploy.md) | The fastest path from a fresh Zerops project to a public, working demo |
 | [`testing.md`](./testing.md) | Exactly what has been run for real against live infrastructure, the bugs that run caught, and what's still only code-reviewed |
-| [`features.md`](./features.md) | Deep reference for the oracle's bet and the autoscaler report card — formulas, thresholds, data contracts, and the reasoning behind them |
+| [`features.md`](./features.md) | Deep reference for the oracle's bet, the autoscaler report card, and the golden run — formulas, thresholds, data contracts, and the reasoning behind them |
 
 ## Reading order
 
@@ -17,8 +17,13 @@ five-minute orientation. Everything below is the detailed reference.
   `running-locally.md`.
 - **About to deploy?** `deploy.md`, then `testing.md` to know what's actually
   been verified versus code-reviewed.
-- **Extending the oracle's bet or the report card?** `features.md` has the
-  exact formulas, thresholds, and data shapes — read it before changing
-  `packages/control/src/scorecard.js` or
-  `apps/web/src/components/PredictionBet.jsx`, since both are documented in
+- **Extending the oracle's bet, the report card, or the golden run?**
+  `features.md` has the exact formulas, thresholds, and data shapes — read it
+  before changing `packages/control/src/scorecard.js`,
+  `apps/web/src/components/PredictionBet.jsx`, or
+  `apps/web/src/lib/goldenReplay.js`, since all three are documented in
   enough detail there to change safely without re-deriving the reasoning.
+- **Preparing for a demo or judging?** The golden run
+  (`features.md#the-golden-run`) is the fallback that works with zero backend
+  infrastructure — refresh it with `npm run export-golden-run -- <runId>`
+  before anything you can't afford to have go wrong.

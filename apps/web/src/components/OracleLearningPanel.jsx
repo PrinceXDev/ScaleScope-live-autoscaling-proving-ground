@@ -72,12 +72,14 @@ export default function OracleLearningPanel() {
             label="targets tracked"
             value={persisted.length}
             color="var(--predicted)"
+            explain="Number of distinct (target hostname, request-cost) combinations the oracle has ever persisted learned parameters for. Each one gets its own independently-fitted capacity/lag model — a twin for one target's scaling behaviour doesn't transfer to a different one."
           />
           <StatTile
             label="total samples"
             value={totalSamples}
             color="var(--predicted)"
             note={lead ? `${lead.samples} on leading target` : undefined}
+            explain="Total ticks, summed across every tracked target, that have ever contributed to a persisted model. A run only contributes once it produces at least 20 frames — see MIN_FRAMES_TO_PERSIST — so a handful of noisy samples can't corrupt a model future runs rely on."
           />
           <StatTile
             label="mean abs error"
@@ -86,12 +88,14 @@ export default function OracleLearningPanel() {
             decimals={2}
             color={errorColor(accuracy?.meanAbsErrorContainers)}
             note={`${Math.round((accuracy?.exactRate ?? 0) * 100)}% exact`}
+            explain="Average |predicted − actual| container count across the oracle's last 200 resolved 15-second forecasts, server-side. 'Exact' below counts only forecasts within 0.5 containers — a tighter bar than the on-screen bet's ±1, because this is the oracle grading its own raw output, not the product-level claim shown elsewhere."
           />
           <StatTile
             label="live twins"
             value={params.live?.length ?? 0}
             color="var(--good)"
             note="tracking an active run"
+            explain="Number of runs currently in progress that the oracle is actively forecasting for, right now, in-memory. Drops to 0 the moment the last active run finishes."
           />
         </div>
 

@@ -193,6 +193,23 @@ each run's durable event log — see `infra/scripts/recompute-scorecards.mjs`
 and [`features.md`](./features.md#the-autoscaler-report-card) for the full
 metric reference.
 
+### Seeing the golden run
+
+Open the Story page (`#/`) with no backend running at all — the "attract
+mode" panel falls back to "golden run — replaying ..." within a few seconds
+and plays a committed fixture entirely client-side, no gateway/NATS/Postgres/
+ClickHouse involved. This is what a judge sees if the backend is cold; it's
+worth checking it actually works before you need it to. To refresh the
+fixture with your own best run once you have a completed one locally:
+
+```bash
+npm run export-golden-run -- <runId>
+```
+
+Writes `apps/web/public/golden-run.json` — commit it by hand. See
+[`features.md`](./features.md#the-golden-run) for the full design and why
+it's a client-side fallback rather than a gateway route.
+
 ## 8. Tear down
 
 ```bash

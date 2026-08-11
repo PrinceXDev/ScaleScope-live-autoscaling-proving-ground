@@ -16,19 +16,86 @@
 }
 
 .chart { width: 100%; }
-.chart-legend { display: flex; gap: 18px; margin-top: 8px; padding-left: 42px; font-size: 12px; color: var(--fg-dim); }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 8px; padding-left: 42px; font-size: 12px; color: var(--fg-dim); }
 .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .chart-legend i { width: 10px; height: 2px; display: inline-block; }
+
+.mini-timeline-wrap { position: relative; }
+.mini-timeline { height: 120px; }
+.mini-timeline-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--fg-faint); font-size: 13px; background: var(--bg-1);
+}
+.accuracy-trend { height: 100px; }
+.accuracy-trend-empty {
+  height: 100px; display: flex; align-items: center; justify-content: center;
+  color: var(--fg-faint); font-size: 13px; border: 1px dashed var(--line-solid); border-radius: var(--r-sm);
+}
+.bet-trend-head {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-faint);
+  margin: 14px 0 6px;
+}
 
 .stat-tile {
   background: var(--bg-1); border: 1px solid var(--line); border-radius: var(--r);
   padding: 14px 16px; border-top: 2px solid var(--tile-color, var(--line-solid));
 }
 .stat-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-faint); }
+.stat-label-row { display: flex; align-items: center; gap: 6px; }
 .stat-value { display: flex; align-items: baseline; gap: 4px; margin-top: 4px; }
 .stat-value .num { font-size: 26px; font-weight: 600; color: var(--tile-color, var(--fg)); }
 .stat-unit { font-size: 12px; color: var(--fg-faint); }
 .stat-note { font-size: 11px; color: var(--fg-faint); margin-top: 2px; }
+
+/*
+ * The "?" glyph is a real <button>, not a span with a hover handler, so it is
+ * keyboard-focusable and screen-reader-navigable on its own -- a judge tabbing
+ * through the page or using a screen reader gets the same explanation a mouse
+ * user gets by hovering. The card is revealed by :hover/:focus-visible alone
+ * (no JS state), which means it also works the instant this stylesheet loads,
+ * before React has hydrated anything.
+ */
+.stat-explain {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; padding: 0; margin: 0;
+  border: 1px solid var(--fg-faint); border-radius: 50%;
+  background: transparent; color: var(--fg-faint);
+  font-size: 10px; line-height: 1; cursor: help;
+}
+.stat-explain:hover, .stat-explain:focus-visible { border-color: var(--fg-dim); color: var(--fg-dim); }
+
+.stat-explain-card {
+  position: absolute; z-index: 20; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: min(240px, calc(100vw - 32px)); padding: 10px 12px;
+  background: var(--bg-2); border: 1px solid var(--line-solid); border-radius: var(--r-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 12px; line-height: 1.5; color: var(--fg-dim); text-transform: none; letter-spacing: normal;
+  text-align: left; font-weight: 400;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.stat-explain:hover .stat-explain-card,
+.stat-explain:focus-visible .stat-explain-card {
+  opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+}
+
+/*
+ * A card centered on its button overflows the viewport once the button sits
+ * near the right edge -- true of the last tile in every stat row on a
+ * non-trivial number of screen widths, not an exotic case. Right-aligning the
+ * last two tiles' cards instead of centering them is a plain-CSS fix that
+ * needs no JS measurement: it trades "always centered" for "never clipped",
+ * which is the correct trade for a tooltip whose entire job is to be read.
+ */
+.stat-row .stat-tile:nth-last-child(-n+2) .stat-explain-card {
+  left: auto; right: 0; transform: translateY(4px);
+}
+.stat-row .stat-tile:nth-last-child(-n+2) .stat-explain:hover .stat-explain-card,
+.stat-row .stat-tile:nth-last-child(-n+2) .stat-explain:focus-visible .stat-explain-card {
+  transform: translateY(0);
+}
 
 .container-grid { display: flex; flex-wrap: wrap; gap: 10px; position: relative; min-height: 92px; }
 .container-grid-empty { color: var(--fg-faint); font-size: 12px; }
