@@ -42,6 +42,45 @@
 .container-card-bar i { display: block; height: 100%; background: var(--latency); }
 .container-card-p95 { font-size: 11px; color: var(--fg-faint); margin-top: 4px; }
 
+.prediction-bet { display: flex; flex-direction: column; }
+.bet-live { display: flex; flex-direction: column; gap: 8px; }
+.bet-claim { display: flex; align-items: baseline; gap: 8px; }
+.bet-claim-label { font-size: 12px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.bet-claim-value { font-size: 22px; font-weight: 600; color: var(--predicted); }
+.bet-countdown { font-size: 12px; color: var(--fg-dim); }
+.bet-progress { height: 3px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+.bet-progress i { display: block; height: 100%; background: var(--predicted); transition: width 1s linear; }
+
+.bet-resolved { display: flex; flex-direction: column; gap: 6px; }
+.bet-resolved-row { display: flex; justify-content: space-between; font-size: 13px; }
+.bet-resolved-label { color: var(--fg-faint); text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em; align-self: center; }
+.bet-resolved-value { font-size: 18px; font-weight: 600; color: var(--fg); }
+.bet-verdict { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; margin-top: 2px; }
+.bet-hit .bet-verdict { color: var(--good); }
+.bet-miss .bet-verdict { color: var(--finding); }
+
+.bet-accuracy-row { grid-template-columns: repeat(2, 1fr); margin-top: 14px; }
+
+.report-card-body { display: flex; flex-direction: column; gap: 16px; }
+.report-grade { display: flex; align-items: baseline; gap: 12px; }
+.report-grade-letter { font-size: 48px; font-weight: 700; line-height: 1; color: var(--report-grade-color, var(--fg)); }
+.report-grade-composite { font-size: 13px; color: var(--fg-faint); }
+.grade-a { --report-grade-color: var(--good); }
+.grade-b { --report-grade-color: var(--containers); }
+.grade-c { --report-grade-color: var(--finding); }
+.grade-low { --report-grade-color: var(--breach); }
+.grade-unknown { --report-grade-color: var(--fg-faint); }
+
+.report-metrics { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.report-metric { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.report-metric:last-child { border-bottom: none; }
+.report-metric-head { display: flex; justify-content: space-between; font-size: 13px; }
+.report-metric-label { color: var(--fg-dim); }
+.report-metric-value { color: var(--fg); font-weight: 600; }
+.report-metric-method { font-size: 11px; color: var(--fg-faint); margin-top: 2px; }
+
+.run-history-grade { color: var(--containers); }
+
 .run-controls { display: flex; flex-direction: column; gap: 14px; }
 .run-controls-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .field-hint { font-size: 12px; color: var(--fg-faint); margin: 4px 0 0; }

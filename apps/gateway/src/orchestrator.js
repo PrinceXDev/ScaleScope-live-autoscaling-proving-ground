@@ -15,6 +15,7 @@ import {
   estimateCost,
   foldRun,
 } from '@scalescope/contracts';
+import { computeScorecard, DEFAULT_CAPACITY_PER_CONTAINER } from '@scalescope/control';
 import { appendEvent, broadcast, pub, subscribe } from '@scalescope/bus';
 import {
   pgPool,
@@ -409,6 +410,50 @@ export async function maybeAutoChaos(finding) {
 // Finalisation: fold the log, write the projections
 // ---------------------------------------------------------------------------
 
+/** Mirrors `apps/oracle/src/persistence.js` -- hostname only, path and port don't affect what the twin learned. */
+function hostnameFromUrl(url) {
+  try {
+    return new URL(String(url)).hostname || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/** Mirrors `apps/oracle/src/persistence.js`'s `twinKey` -- same run shape, same learned capacity. */
+function twinKey(targetHostname, rounds) {
+  return `${targetHostname || 'unknown'}:${Number(rounds) || 0}`;
+}
+
+/**
+ * Assemble the inputs `computeScorecard()` needs and run it.
+ *
+ * Reads the per-second timeline from ClickHouse and the oracle's learned
+ * capacity-per-container for this target from `twin_params`, both on a
+ * best-effort basis -- a scorecard with fewer available metrics (null
+ * settling time, overshoot, cost efficiency) is preferable to finalisation
+ * failing because an analytical store hiccupped.
+ */
+async function buildScorecard(runId, folded, events) {
+  try {
+    const [timelineRows, twinRow] = await Promise.all([
+      chJson('SELECT t, containers, rps, p95 FROM run_timeline WHERE run_id = :id ORDER BY t', { id: runId }).catch(() => []),
+      pgPool.query('SELECT params FROM twin_params WHERE target_key = $1', [
+        twinKey(hostnameFromUrl(folded?.config?.targetUrl), folded?.config?.rounds),
+      ]).catch(() => null),
+    ]);
+
+    const timeline = (timelineRows || []).map((r) => ({
+      t: Number(r.t), containers: Number(r.containers), rps: Number(r.rps), p95: Number(r.p95),
+    }));
+    const capacityPerContainer = twinRow?.rows?.[0]?.params?.capacityPerContainer ?? DEFAULT_CAPACITY_PER_CONTAINER;
+
+    return computeScorecard({ folded, events, timeline, capacityPerContainer });
+  } catch (err) {
+    log.error(`scorecard computation failed for ${runId}: ${err.message}`);
+    return null;
+  }
+}
+
 /**
  * Turn a finished run's event log into the denormalised row the history list
  * reads.
@@ -427,7 +472,8 @@ export async function finishRun(runId, reason = 'scheduled') {
 
   try {
     const events = await readRunEvents(nc, runId);
-    const folded = foldRun(events.map((e) => ({ type: e.env.type, data: e.env.data, seq: e.seq })));
+    const foldedEvents = events.map((e) => ({ type: e.env.type, data: e.env.data, seq: e.seq }));
+    const folded = foldRun(foldedEvents);
 
     if (folded.status === 'completed' || folded.status === 'failed') {
       // Already terminal -- a stop and the scheduled timer raced and the other
@@ -435,6 +481,8 @@ export async function finishRun(runId, reason = 'scheduled') {
       await RunLocks.release(runId).catch(() => {});
       return folded;
     }
+
+    const scorecard = await buildScorecard(runId, folded, foldedEvents);
 
     const containerSeconds = folded.containerSeconds || 0;
     const summary = {
@@ -457,6 +505,7 @@ export async function finishRun(runId, reason = 'scheduled') {
       scaleEvents: folded.scaleEvents.length,
       chaosEvents: folded.chaosEvents.length,
       findingEvents: folded.findingEvents.length,
+      scorecard,
     };
 
     await pgPool.query(
@@ -471,7 +520,8 @@ export async function finishRun(runId, reason = 'scheduled') {
          container_seconds = $7,
          total_requests = $8,
          total_errors = $9,
-         est_cost_usd = $10
+         est_cost_usd = $10,
+         scorecard = $11::jsonb
        WHERE id = $1`,
       [
         runId,
@@ -484,6 +534,7 @@ export async function finishRun(runId, reason = 'scheduled') {
         summary.totalRequests,
         summary.totalErrors,
         summary.estCostUsd,
+        scorecard ? JSON.stringify(scorecard) : null,
       ],
     );
 

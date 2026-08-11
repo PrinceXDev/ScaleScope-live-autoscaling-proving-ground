@@ -16,6 +16,21 @@ const emptySeries = () => ({
   t: [], rps: [], p95: [], p50: [], containers: [], predicted: [], errors: [], concurrency: [],
 });
 
+const scoreBet = (bet, actual) => {
+  const absError = Math.abs(actual - bet.predicted);
+  return { ...bet, actual, absError, hit: absError <= 1 };
+};
+
+const applyResolution = (s, resolved) => {
+  const n = s.betAccuracy.n + 1;
+  const mae = s.betAccuracy.mae + (resolved.absError - s.betAccuracy.mae) / n;
+  const hits = Math.round(s.betAccuracy.hitRate * s.betAccuracy.n) + (resolved.hit ? 1 : 0);
+  return {
+    betHistory: [resolved, ...s.betHistory].slice(0, 50),
+    betAccuracy: { n, mae, hitRate: hits / n },
+  };
+};
+
 export const useStore = create((set, get) => ({
   // ---- connection ----
   connected: false,
@@ -38,9 +53,15 @@ export const useStore = create((set, get) => ({
   instances: new Map(),      // id -> { id, firstT, lastT, requests, peakP95 }
   workers: new Set(),
 
+  // ---- the oracle's bet: one committed forecast, latched at t, due at t+horizonS ----
+  pendingBet: null,          // { t, dueT, horizonS, predicted, confidence } | null
+  betHistory: [],            // resolved bets, newest first: [{ ...pendingBet, actual, absError, hit }]
+  betAccuracy: { n: 0, mae: 0, hitRate: 0 }, // hit = absError <= 1
+
   peak: { containers: 0, rps: 0, p95: 0 },
   timeToRecoverS: null,
   costUsd: 0,
+  scorecard: null,           // set by `completeRun` once the run finishes -- see packages/control/src/scorecard.js
 
   // ---- catalogue ----
   runs: [],
@@ -68,9 +89,34 @@ export const useStore = create((set, get) => ({
     sloEvents: [],
     findingEvents: [],
     instances: new Map(),
+    pendingBet: null,
+    betHistory: [],
+    betAccuracy: { n: 0, mae: 0, hitRate: 0 },
     peak: { containers: 0, rps: 0, p95: 0 },
     timeToRecoverS: null,
     costUsd: 0,
+    scorecard: null,
+  }),
+
+  /**
+   * Latch a new committed bet from a `prediction` SSE event. Only one bet is
+   * live at a time -- if a prior one never reached its due tick (run ended,
+   * dropped frame) it is discarded unresolved rather than scored, since an
+   * unresolved bet has no `actual` to compare against.
+   */
+  pushPrediction: (p) => set((s) => {
+    if (s.runId && p.runId && p.runId !== s.runId) return s;
+    // A new forecast can land on the exact tick a prior bet was due (the oracle
+    // reads the fleet and re-predicts every tick). Score the outgoing bet
+    // against the tick that just arrived before it's replaced, rather than
+    // silently discarding it unresolved.
+    const outgoing = s.pendingBet && p.t >= s.pendingBet.dueT
+      ? scoreBet(s.pendingBet, s.frame?.containers ?? 0)
+      : null;
+    return {
+      pendingBet: { t: p.t, dueT: p.t + p.horizonS, horizonS: p.horizonS, predicted: p.predicted, confidence: p.confidence },
+      ...(outgoing ? applyResolution(s, outgoing) : {}),
+    };
   }),
 
   /**
@@ -80,6 +126,15 @@ export const useStore = create((set, get) => ({
    */
   ingestTick: (f) => set((s) => {
     if (s.runId && f.runId && f.runId !== s.runId) return s;
+
+    // Resolve the pending bet once reality reaches the tick it targeted.
+    let pendingBet = s.pendingBet;
+    let { betHistory, betAccuracy } = s;
+    if (pendingBet && f.t >= pendingBet.dueT) {
+      const resolved = scoreBet(pendingBet, f.containers ?? 0);
+      ({ betHistory, betAccuracy } = applyResolution(s, resolved));
+      pendingBet = null;
+    }
 
     const series = s.series;
     series.t.push(f.t);
@@ -117,6 +172,9 @@ export const useStore = create((set, get) => ({
       costUsd: f.costUsd ?? s.costUsd,
       series: { ...series },
       instances: new Map(instances),
+      pendingBet,
+      betHistory,
+      betAccuracy,
       peak: {
         containers: Math.max(s.peak.containers, f.containers || 0),
         rps: Math.max(s.peak.rps, f.rps || 0),

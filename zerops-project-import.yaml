@@ -7,7 +7,7 @@
 # or paste into "Import a project" in the Zerops GUI.
 #
 # FASTEST PATH TO A LIVE DEMO: import everything below, then push code (see
-# DEPLOY.md) to just five services first -- gateway, collector, worker, target,
+# docs/deploy.md) to just five services first -- gateway, collector, worker, target,
 # web -- plus the four data-tier services, which need no code at all. That is
 # enough for the full live-scaling demo end to end. oracle, chaos and scheduler
 # add the prediction ghost-line, fault injection and unattended experiment

@@ -42,7 +42,7 @@ const RUN_COLUMNS = `
   slo_p95_ms, setpoint_ms, chaos, status, suite_id, suite_step, t0_ms,
   started_at, ended_at, peak_containers, peak_rps, peak_p95_ms, min_p95_ms,
   time_to_recover_s, container_seconds, total_requests, total_errors,
-  est_cost_usd, linearity, is_showcase, notes, created_at`;
+  est_cost_usd, linearity, scorecard, is_showcase, notes, created_at`;
 
 export function runsRoutes(ctx) {
   const router = Router();

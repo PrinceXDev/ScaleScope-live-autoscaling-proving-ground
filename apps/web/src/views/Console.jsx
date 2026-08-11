@@ -4,6 +4,8 @@ import { useStore } from '../lib/store.js';
 import { emitTopologyEvent } from '../motion/gsap.js';
 import TimelineChart from '../components/TimelineChart.jsx';
 import StatTile from '../components/StatTile.jsx';
+import PredictionBet from '../components/PredictionBet.jsx';
+import ReportCard from '../components/ReportCard.jsx';
 import ContainerGrid from '../components/ContainerGrid.jsx';
 import EventTicker from '../components/EventTicker.jsx';
 import RunControls from '../components/RunControls.jsx';
@@ -53,6 +55,9 @@ export default function Console({ replayRunId = null }) {
         break;
       case 'tick':
         s.ingestTick(data);
+        break;
+      case 'prediction':
+        s.pushPrediction(data);
         break;
       case 'scaled':
         s.pushScale(data);
@@ -130,6 +135,14 @@ export default function Console({ replayRunId = null }) {
           <StatTile label="time to recover" value={store.timeToRecoverS ?? '—'} unit={store.timeToRecoverS ? 's' : ''} color="var(--good)" />
         </div>
 
+        {store.status === 'completed' && <ReportCard scorecard={store.scorecard} />}
+
+        <PredictionBet
+          pendingBet={store.pendingBet}
+          betHistory={store.betHistory}
+          betAccuracy={store.betAccuracy}
+        />
+
         <section className="panel">
           <header className="panel-head"><span className="panel-title">Containers, observed</span></header>
           <div className="panel-body">
@@ -170,6 +183,7 @@ export default function Console({ replayRunId = null }) {
                   <a href={`#/r/${r.id}`}>{r.name}</a>
                   <span className="mono">
                     {r.peak_containers ?? '—'} ctr · p95 {r.peak_p95_ms ? Math.round(r.peak_p95_ms) : '—'}ms · {r.status}
+                    {r.scorecard?.grade && <span className="run-history-grade"> · grade {r.scorecard.grade}</span>}
                   </span>
                 </li>
               ))}

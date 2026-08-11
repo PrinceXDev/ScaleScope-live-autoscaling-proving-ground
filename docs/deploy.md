@@ -5,9 +5,9 @@ oracle, chaos, scheduler) has been built, syntax-checked, and **run end to end
 locally** — a real run starts through the barrier, load fires, the container
 count is measured, chaos injection lands, the oracle predicts, and the run
 finalises correctly. The web console builds cleanly. Two real bugs were found
-and fixed by that local run (see `TESTING.md`) that would otherwise have
-broken every single run or corrupted the architecture panel — this is not
-theoretical readiness, it's tested.
+and fixed by that local run (see [`testing.md`](./testing.md)) that would
+otherwise have broken every single run or corrupted the architecture panel —
+this is not theoretical readiness, it's tested.
 
 What's *not* yet done, honestly: the full scroll-scrubbed story page (Lenis +
 ScrollTrigger scrubbing a recorded run as you scroll) is stubbed as a hero +
